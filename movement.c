@@ -1,0 +1,63 @@
+#include "movement.h"
+
+int move(oi_t *sensor, int distance_mm, int speed_mm, int forward) {
+    if (!sensor) {
+        return -500; // Return error state if sensor is null
+    }
+
+    double dist = 0;
+
+    oi_setWheels(speed_mm, speed_mm); // Sets and converts the speed from mm/s
+    while (forward ? dist < distance_mm : dist > distance_mm) {
+        oi_update(sensor);
+        dist += sensor->distance; // Add the new distance travel sense last read
+        if (forward && (sensor->bumpLeft || sensor->bumpRight)) {
+            break;
+        }
+    }
+    oi_setWheels(0,0); // stop
+    oi_update(sensor);
+    dist += sensor->distance;
+
+    if (forward) {
+        return dist; // returns MILLIMETERS
+    } else {
+        return -dist; // always return positive distance traveled, returns MILLIMETERS
+    }
+}
+
+int move_forward(oi_t *sensor, int distance_mm, int speed_mm) {
+    return move(sensor, distance_mm, speed_mm, 1);
+}
+
+int move_backward(oi_t *sensor, int distance_mm, int speed_mm) {
+    return move(sensor, -distance_mm, -speed_mm, 0);
+}
+
+
+int turn(oi_t *sensor, int degrees, int speed_mm, int turn_cw) {
+    degrees = (int) degrees * 0.97;
+    double ang = sensor->angle;
+    int updated_speed = 0;
+
+    oi_setWheels(speed_mm * -1, speed_mm); // Sets and converts the speed from cm/s to mm/s
+    while (turn_cw ? -ang < degrees : ang < degrees) {
+        oi_update(sensor);
+        ang += sensor->angle; // Add the new angle turned sense last read
+        if (!updated_speed && (turn_cw ? -ang > (int) degrees * 0.7 : ang > (int) degrees * 0.7)) { // Slow down for the last 30%
+            oi_setWheels(-speed_mm / 2, speed_mm / 2);
+            updated_speed = 1;
+        }
+    }
+    oi_setWheels(0,0); // stop
+
+    return ang; // returns DEGREES
+}
+
+int turn_clockwise(oi_t *sensor, int degrees, int speed_mm) {
+    return turn(sensor, degrees, speed_mm, 1);
+}
+
+int turn_counterclockwise(oi_t *sensor, int degrees, int speed_mm) {
+    return turn(sensor, degrees, -speed_mm, 0);
+}
