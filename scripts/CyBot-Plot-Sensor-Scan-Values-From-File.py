@@ -1,0 +1,61 @@
+# Description: Display using a polar plot the distance measurements collected by a CyBot 180 degree 
+# sensor scan at 4 degree increments from 0 to 180 degrees. Sensor data read from a text file.
+
+# Original Code example modified by: Phillip Jones (10/02/2021), (05/15/2023)
+# Modified Code example by: Sean Krueger & Garrett Thompson (9/18/2025)
+# Original polar plot code example from matplot: https://matplotlib.org/stable/gallery/pie_and_polar_charts/polar_demo.html
+
+# Useful matplotlib tutorial: https://matplotlib.org/stable/tutorials/introductory/pyplot.html
+# Useful best practices Quick Start: https://matplotlib.org/stable/tutorials/introductory/quick_start.html
+# General Python Reference/Tutorials: https://www.w3schools.com/python/ 
+
+# Quick YouTube Overviews (See above links as primary resources for additional details): 
+# - Quick Polar Plot (subplot) Overview: https://www.youtube.com/watch?v=pb-pZtvkGPM
+# - Quick subplots Overview : https://www.youtube.com/watch?v=Tqph7_qMujk
+
+#Import/Include useful math and plotting functions
+import numpy as np
+import matplotlib.pyplot as plt
+import os  # import function for finding absolute path to this python script
+import sys
+
+filenames = sys.argv[1:] # Name of sensor data file
+num_files = len(filenames)
+
+fig, ax = plt.subplots(subplot_kw={'projection': 'polar'}) # One subplot of type polar
+
+# Open file containing CyBot sensor scan from 0 - 180 degrees
+for _, filename in enumerate(filenames):
+    with open(filename,'r') as file_object: # Open the file: file_object is just a variable for the file "handler" returned by open()
+        file_header = file_object.readline() # Read and store the header row (i.e., 1st row) of the file into file_header
+        file_data = file_object.readlines()  # Read the rest of the lines of the file into file_data
+
+    distance = np.empty(len(file_data), dtype=float) # Initally empty
+    angle_degrees = np.empty(len(file_data), dtype=float) # Initally empty
+
+    # For each line of the file split into columns, and assign each column to a variable
+    for j, line in enumerate(file_data): 
+        data = line.split()    # Split line into columns (by default delineates columns by whitespace)
+        if not data:
+            continue
+        angle_degrees[j] = float(data[0].strip())  # Column 0 holds the angle at which distance was measured
+        distance[j] = float(data[1].strip()) / 100       # Column 1 holds the distance that was measured at a given angle
+
+    ax.plot(np.radians(angle_degrees), distance, linewidth=4.0)  # Plot distance verse angle (in radians), using red, line width 4.0
+
+# Create a polar plot
+ax.set_xlabel('Distance (m)', fontsize = 14.0)  # Label x axis
+ax.set_ylabel('Angle (degrees)', fontsize = 14.0) # Label y axis
+ax.xaxis.set_label_coords(0.5, 0.15) # Modify location of x axis label (Typically do not need or want this)
+ax.tick_params(axis='both', which='major', labelsize=14) # set font size of tick labels
+ax.set_rmax(2.5)                    # Saturate distance at 2.5 meters
+ax.set_rticks([0.5, 1, 1.5, 2, 2.5])   # Set plot "distance" tick marks at .5, 1, 1.5, 2, and 2.5 meters
+ax.set_rlabel_position(-22.5)     # Adjust location of the radial labels
+ax.set_thetamax(180)              # Saturate angle to 180 degrees
+ax.set_xticks(np.arange(0,np.pi+.1,np.pi/4)) # Set plot "angle" tick marks to pi/4 radians (i.e., displayed at 45 degree) increments
+                                             # Note: added .1 to pi to go just beyond pi (i.e., 180 degrees) so that 180 degrees is displayed
+ax.grid(True)                     # Show grid lines
+
+# Create title for plot (font size = 14pt, y & pad controls title vertical location)
+ax.set_title("Mock-up Polar Plot of CyBot Sensor Scan from 0 to 180 Degrees", size=14, y=1.0, pad=-24) 
+plt.show()  # Display plot
