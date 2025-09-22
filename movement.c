@@ -1,10 +1,13 @@
 #include "movement.h"
 
+#include "calibration.h"
+
 int move(oi_t *sensor, int distance_mm, int speed_mm, int forward) {
     if (!sensor) {
         return -500; // Return error state if sensor is null
     }
-
+    // Calibration #s for CyBot (see calibration.h)
+    distance_mm = (int) (distance_mm * STRAIGHT_MULTIPLIER);
     double dist = 0;
 
     oi_setWheels(speed_mm, speed_mm); // Sets and converts the speed from mm/s
@@ -36,7 +39,8 @@ int move_backward(oi_t *sensor, int distance_mm, int speed_mm) {
 
 
 int turn(oi_t *sensor, int degrees, int speed_mm, int turn_cw) {
-    degrees = (int) degrees * 0.97;
+    // Calibration #s for CyBot (see calibration.h)
+    degrees = (int) (degrees * TURN_MULTIPLIER);
     double ang = sensor->angle;
     int updated_speed = 0;
 
