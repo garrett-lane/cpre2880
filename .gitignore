@@ -6,3 +6,5 @@ RemoteSystemsTempFiles/
 .launches/
 
 *log*
+tags
+*.out
