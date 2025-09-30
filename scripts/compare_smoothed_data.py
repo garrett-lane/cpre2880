@@ -125,7 +125,7 @@ async def update_object_plot(ax):
             ax.plot(np.radians(angle), distance, 'o', markersize=width, markerfacecolor='none')
         elif line.startswith("CLEAR"):
             ax.clear()
-            create_polar_graph(object_ax, "Objects (Not to scale)")
+            create_polar_graph(ax, "Objects (Not to scale)")
 
 async def main():
     plt.ion()
