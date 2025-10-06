@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import signal
+import socket
 import sys
 
 import numpy as np
@@ -11,6 +12,20 @@ object_queue = asyncio.Queue()
 stop = asyncio.Event()
 
 in_scan = False
+
+class CyBotClientProtocol(asyncio.Protocol):
+    def __init__(self, on_con_lost):
+        self.on_con_lost = on_con_lost
+
+    def connection_made(self, transport):
+        print(f"Connected to server")
+
+    def data_recieved(self, data):
+        print(f"Data recieved {data}")
+
+    def connection_lost(self, exc):
+        print(f"Server closed the connection")
+        self.on_con_lost.set_result(True)
 
 def create_polar_graph(ax, title):
     # Create a polar plot
@@ -32,31 +47,36 @@ def on_close(event):
     print("Matplot closed, exiting")
     stop.set()
 
-def stdin_callback():
+async def read_stdin(con_writer):
     global in_scan
-    if stop.is_set():
-        return
+    print("Read started")
 
-    new_line = sys.stdin.readline()
-    if not new_line:
-        return
-    new_line = new_line.strip()
-    if args.debug:
-        print(new_line)
-
-    if new_line.startswith("CLEAR"):
-        scan_queue.put_nowait(new_line)
-        object_queue.put_nowait(new_line)
-    elif in_scan or new_line.startswith("STARTSCAN") or new_line.startswith("ENDSCAN"):
-        scan_queue.put_nowait(new_line)
-    elif new_line.startswith("OBJECT"):
-        object_queue.put_nowait(new_line)
-
-async def read_stdin():
-    loop = asyncio.get_running_loop()
-    loop.add_reader(sys.stdin, stdin_callback)
     while not stop.is_set():
-        await asyncio.sleep(0.01)
+        val = await asyncio.to_thread(sys.stdin.readline)
+        con_writer.write(val.encode())
+
+async def recieve_from_bot(con_reader):
+    global in_scan
+    loop = asyncio.get_running_loop()
+
+    print("Connected to server")
+
+    while not stop.is_set():
+        try:
+            con_response = await asyncio.wait_for(con_reader.read(4096), timeout=0.05)
+            line = con_response.decode('utf-8').strip()
+            print(line)
+
+            if line.startswith("CLEAR"):
+                scan_queue.put_nowait(line)
+                object_queue.put_nowait(line)
+            elif in_scan or line.startswith("STARTSCAN") or line.startswith("ENDSCAN"):
+                scan_queue.put_nowait(line)
+            elif line.startswith("OBJECT"):
+                object_queue.put_nowait(line)
+
+        except asyncio.TimeoutError as e:
+            continue
 
 async def update_scan_plot(ax):
     distance = None
@@ -137,8 +157,11 @@ async def main():
 
     plt.show()  # Display plot
 
+    con_reader, con_writer = await asyncio.open_connection("192.168.1.1", 288)
+
     async with asyncio.TaskGroup() as tg:
-        tg.create_task(read_stdin())
+        tg.create_task(read_stdin(con_writer))
+        tg.create_task(recieve_from_bot(con_reader))
         tg.create_task(update_scan_plot(scan_ax))
         tg.create_task(update_object_plot(object_ax))
 
