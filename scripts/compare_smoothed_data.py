@@ -49,7 +49,8 @@ def on_close(event):
 
 async def read_stdin(con_writer):
     global in_scan
-    print("Read started")
+    if args.debug:
+        print("Read started")
 
     while not stop.is_set():
         val = await asyncio.to_thread(sys.stdin.readline)
@@ -57,34 +58,40 @@ async def read_stdin(con_writer):
 
 async def recieve_from_bot(con_reader):
     global in_scan
-    loop = asyncio.get_running_loop()
-
-    print("Connected to server")
 
     while not stop.is_set():
         try:
             con_response = await asyncio.wait_for(con_reader.read(4096), timeout=0.05)
             line = con_response.decode('utf-8').strip()
-            print(line)
-
-            if line.startswith("CLEAR"):
-                scan_queue.put_nowait(line)
-                object_queue.put_nowait(line)
-            elif in_scan or line.startswith("STARTSCAN") or line.startswith("ENDSCAN"):
-                scan_queue.put_nowait(line)
-            elif line.startswith("OBJECT"):
-                object_queue.put_nowait(line)
-
         except asyncio.TimeoutError as e:
             continue
+
+        # except UnicodeDecodeError:
+        #     if args.debug:
+        #         print("bad char recieved")
+        #     continue
+
+        if args.debug:
+            print(line)
+
+        if line.startswith("CLEAR"):
+            scan_queue.put_nowait(line)
+            object_queue.put_nowait(line)
+        elif in_scan or line.startswith("STARTSCAN") or line.startswith("ENDSCAN"):
+            scan_queue.put_nowait(line)
+            print("put")
+        elif line.startswith("OBJECT"):
+            object_queue.put_nowait(line)
+
 
 async def update_scan_plot(ax):
     distance = None
     angle_degrees = None
     global in_scan
-    i = 0
+    index = 0
     prev = None
     line = None
+    num_plots = 1
     while not stop.is_set():
         try:
             line = await asyncio.wait_for(scan_queue.get(), timeout=0.05)
@@ -95,32 +102,44 @@ async def update_scan_plot(ax):
         if line.startswith("STARTSCAN"):
             count = 91
             if len(line.split()) > 1:
-                count = line.split()[1]
-            print(f"Beginning to plot scan. {count} entries")
-            distance = np.empty(int(count), dtype=float) # Initally empty
+                count = int(line.split()[1])
+                if len(line.split()) > 2:
+                    num_plots = int(line.split()[2])
+
+            print(f"Beginning to plot {num_plots} scan(s). {count} entries")
+            distance = [np.empty(int(count), dtype=float)] * num_plots
             angle_degrees = np.empty(int(count), dtype=float) # Initally empty
-            i = 0 
+            index = 0
             in_scan = True
         elif line.startswith("ENDSCAN"):
             print("Drawing final scan")
             if prev:
-                prev.remove()
-                prev = None
-            ax.plot(np.radians(angle_degrees), distance, linewidth=2.0)
+                for p in prev:
+                    p.remove()
+                    p = None
+
+            for i in range(num_plots):
+                ax.plot(np.radians(angle_degrees), distance[i], linewidth=2.0)
+
             plt.draw()
             in_scan = False
             plt.pause(0.1)
         elif in_scan and (distance is not None and angle_degrees is not None):
             data = line.split()    # Split line into columns (by default delineates columns by whitespace)
             if len(data) > 1:
-                angle_degrees[i] = float(data[0].strip())  # Column 0 holds the angle at which distance was measured
-                distance[i] = float(data[1].strip()) / 100       # Column 1 holds the distance that was measured at a given angle       
+                angle_degrees[index] = float(data[0].strip())  # Column 0 holds the angle at which distance was measured
+                for i in range(num_plots):
+                    distance[i][index] = float(data[i + 1].strip()) / 100       # Column 1 holds the distance that was measured at a given angle
+
                 if args.real_time:
-                    if prev:
-                        prev.remove()
-                    prev, = ax.plot(np.radians(angle_degrees[:i]), distance[:i], color="grey", linewidth=2.0)
+                    for p in prev:
+                        p.remove()
+
+                    for i in range(num_plots):
+                        p, = ax.plot(np.radians(angle_degrees[:index]), distance[0][:index], color="grey", linewidth=2.0)
+                        prev.append(p)
                     plt.draw()
-                i += 1
+                index += 1
         elif line.startswith("CLEAR"):
             print("Clearing plots")
             ax.clear()
