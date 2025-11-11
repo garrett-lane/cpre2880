@@ -1,5 +1,5 @@
 run2:
-	python3 gui.py
+	python3 app.py
 
 run: build
 	./a.out | python3 compare_smoothed_data.py -d
