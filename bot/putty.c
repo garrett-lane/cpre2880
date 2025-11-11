@@ -7,23 +7,22 @@
 
 #include "putty.h"
 
-#include "cyBot_uart.h"
+#include <stdio.h>
+#include "uart.h"
 
 #define TOTAL_CHARS 50
 
 void putty_send_object(Object_t *object) {
-    putty_printf("OBJECT %f %f %d\n", object->center_angle, object->distance, object->linear_width);
+    putty_printf("OBJECT %.1f %f %d\n", object->center_angle, object->distance, object->linear_width);
 }
 
 void putty_send_scan_data(int angle, cyBOT_Scan_t *scan_data) {
-    putty_printf("%3d\t\t%10f\n", angle, scan_data->sound_dist);
+    putty_printf("%3d\t%10f\t%10d\n", angle, scan_data->sound_dist, scan_data->IR_raw_val);
 }
 
-void putty_send_string(char *str, int length) {
-    int i = 0;
-    for (i = 0; i < length; i++) {
-        cyBot_sendByte(str[i]);
-    }
+void putty_puts(char string[], int length) {
+    string[length] = '\0';
+    uart_sendStr(string);
 }
 
 void putty_printf(const char *format, ...) {
@@ -36,14 +35,15 @@ void putty_printf(const char *format, ...) {
     char *str = buffer;
     while (*str) {
         if (*str == '\n') {
-            cyBot_sendByte('\r');
-            cyBot_sendByte(*str);
-        } else {
-            cyBot_sendByte(*str);
+            uart_sendChar('\r');
+            uart_sendChar(*str);
+        } else if (*str == 9 || (*str >= 32 && *str <= 126)) {
+            uart_sendChar(*str);
         }
 
         str++;
     }
+
     va_end(arglist);
 }
 

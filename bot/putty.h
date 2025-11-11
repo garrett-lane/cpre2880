@@ -14,10 +14,7 @@
 void putty_send_object(Object_t *object);
 void putty_send_scan_data(int angle, cyBOT_Scan_t *scan_data);
 
-// Takes a char array and sends its content one byte at a time over UART to PuTTy
-// cyBot_uart_init *must* have been previously called
-void putty_send_string(char *str, int length);
-
+void putty_puts(char string[], int length);
 
 // String MUST be null terminated and less than 50 characters
 // cyBot_uart_init *must* have been previously called

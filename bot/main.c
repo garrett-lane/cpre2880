@@ -1,31 +1,113 @@
-#include "open_interface.h"
-#include "lcd.h"
-#include "cyBot_Scan.h"
-#include "cyBot_uart.h"
-#include "timer.h"
-
+#include "adc.h"
+#include "button.h"
 #include "calibration.h"
+#include "cyBot_Scan.h"
+#include "driverlib/interrupt.h"
+#include "lcd.h"
 #include "movement.h"
+#include "open_interface.h"
+#include "ping.h"
 #include "putty.h"
 #include "sensor.h"
+#include "servo.h"
+#include "Timer.h"
+#include "uart.h"
+#include <inc/tm4c123gh6pm.h>
+#include <math.h>
+#include <stdbool.h>
+#include <stdint.h>
+// Dont worry sean, I alphabatized our includes! You're Welcome!
 
-// Method Prototypes
-float evaluate_data(float data_array[], int arrLength);
+volatile char uart_data;  // Your UART interrupt code can place read data here
+#define PI 3.14159
 
-void scan(cyBOT_Scan_t *scan_data, oi_t *data);
+typedef enum movements_e {
+    FORWARD,
+    BACKWARD,
+    CW,
+    CCW,
+    NONE
+} Movements;
+
+typedef struct planned_movement_t {
+    Movements move;
+    int amount;
+    int speed;
+} Planned_Movement;
+
+typedef enum states_e {
+    IDLE,
+    MANUAL,
+    AUTO
+} States;
+
+Planned_Movement next_move;
+int prev_full_scan;
+
+unsigned int dist;
+char string[10];
+
+States handle_idle(char val);
+States handle_manual(char val, oi_t *data, cyBOT_Scan_t *scan_data);
+States handle_auto(char val, oi_t *data, cyBOT_Scan_t *scan_data);
 
 void main()
 {
     // Servo Calibration Code
 #if CONFIGURE
-    timer_init();
-    lcd_init();
-    cyBOT_init_Scan(0b0011);
-    cyBot_uart_init();
+    oi_t *cal_data = oi_alloc();
 
-    cyBOT_SERVRO_cal_t cal = cyBOT_SERVO_cal();
-    putty_printf("Left: %d\n", cal.left);
-    putty_printf("Right: %d\n", cal.right);
+    oi_init(cal_data); // should turn the iRobot Create's "Dirt Detect" LED to blue
+    lcd_init();
+    timer_init();
+    ping_init();
+    servo_init();
+    button_init();
+    uart_init(115200);
+    uart_interrupt_init();
+    adc_init();
+
+    lcd_clear();
+    // lcd_puts("Calibrating");
+
+    calibrate_servo();
+
+    servo_move(90);
+    timer_waitMillis(500);
+    servo_move(45);
+    timer_waitMillis(500);
+    servo_move(135);
+    timer_waitMillis(500);
+    servo_move(0);
+    timer_waitMillis(500);
+    servo_move(180);
+    timer_waitMillis(500);
+
+    servo_move(90);
+    timer_waitMillis(300);
+    char cal_byte ='\0';
+    while (uart_data != '~') {
+        if (uart_flag) {
+            cal_byte = uart_data;
+
+            if (cal_byte == '\n' || cal_byte == '\r') {
+                uart_flag = 0;
+                continue;
+            }
+
+            switch (cal_byte) {
+                case 'i':
+                    calibrate_ir(cal_data);
+                    break;
+                case 'o':
+                    avg_ir_scan(cal_data);
+                    break;
+                default: break;
+            }
+
+            uart_flag = 0;
+        }
+    }
 
     return;
 #endif
@@ -36,122 +118,220 @@ void main()
     oi_init(data); // should turn the iRobot Create's "Dirt Detect" LED to blue
     lcd_init();
     timer_init();
-    cyBot_uart_init();
-    // Bits (Useless, IR Sensor, Ping Sensor, Servo)
-    cyBOT_init_Scan(0b0011);
+    servo_init();
+    ping_init();
+    uart_init(115200);
+    uart_interrupt_init();
+    adc_init();
 
-    // Calibration #s for CyBot (see calibration.h)
-    left_calibration_value = LEFT_SERVO_CALIBRATION;
-    right_calibration_value = RIGHT_SERVO_CALIBRATION;
+    set_servo_calibation(CALIBRATION_0_DEG, CALIBRATION_180_DEG);
 
     lcd_clear();
 
-    char byte ='\0';
-    while (byte != '~') {
-        byte = cyBot_getByte();
-        if (byte == '\n' || byte == '\r') {
-            continue;
+    lcd_puts("V0.5");
+
+    States current_state = IDLE;
+    next_move.move = NONE;
+    prev_full_scan = 0;
+
+    char temp;
+    while (uart_data != '~') {
+        if (uart_flag) {
+            temp = uart_data;
+
+            if (temp == '\r') {
+                uart_sendChar('\n');
+                goto reset_uart_flag;
+            } else if (temp == '\n') {
+                goto reset_uart_flag;
+            }
+
+            switch (temp) {
+                case 'h':
+                    current_state = AUTO;
+                    break;
+                case 't':
+                    if (current_state == AUTO) {
+                        current_state = MANUAL;
+                    } else if (current_state == MANUAL) {
+                        current_state = AUTO;
+                    }
+                    break;
+                default:
+                    current_state = MANUAL;
+                    break;
+            }
+
+reset_uart_flag:
+            uart_flag = 0;
         }
 
-        lcd_putc(byte);
-
-        switch (byte) {
-            case 'm':
-                scan(&scan_data, data);
-                break;
-            case 'w':
-                move_forward(data, 50, 250);
-                break;
-            case 's':
-                move_backward(data, 50, 250);
-                break;
-            case 'a':
-                turn_counterclockwise(data, 15, 250);
-                break;
-            case 'd':
-                turn_clockwise(data, 15, 250);
-                break;
-            case 'c':
-                putty_send_string("CLEAR\n", 6);
-                break;
-            default:  break;
+        if (adc_flag) {
+            putty_printf("%d\n", adc_data);
+            float distCM = VTOCM_COEFF * pow(adc_data, VTOCM_EXP);
+            putty_printf("%.2f cm", distCM);
+            adc_flag = 0;
         }
+
+        if (temp) {
+            lcd_clear();
+        }
+        switch (current_state) {
+            case IDLE:
+                if (temp) {
+                    lcd_puts("Idle");
+                }
+                current_state = handle_idle(temp);
+                break;
+            case MANUAL:
+                if (temp) {
+                    lcd_puts("Manual");
+                }
+                current_state = handle_manual(temp, data, &scan_data);
+                break;
+            case AUTO:
+                if (temp) {
+                    lcd_puts("Auto");
+                }
+                current_state = handle_auto(temp, data, &scan_data);
+                break;
+        }
+        temp = 0;
     }
-
-
 
     //required end statement
     oi_free(data);
 }
 
-void scan(cyBOT_Scan_t *scan_data, oi_t *data) {
-    float ptToDeg = 0;
-    char debugString[10];
-
-    cyBOT_Scan(0, scan_data);  // set to zero to have correct data
-    timer_waitMillis(1000);
-    putty_printf("STARTSCAN 91\n");
-    scan_range(0, 180, 2, scan_data, process_noisy_data);
-    timer_waitMillis(200);
-    putty_printf("ENDSCAN\n");
-
-#if DEBUG
-    int i = 0;
-    putty_printf("STARTSCAN 91\n");
-    for (i = 0; i < 91; i++) {
-        putty_printf("%3d\t\t%10f\n", i * 2, scan_sensor_data_array[i]);
+States handle_idle(char val) {
+    if (!val) {
+        return IDLE;
     }
-    timer_waitMillis(200);
-    putty_printf("ENDSCAN\n");
-#endif
-
-    ptToDeg = evaluate_data(scan_sensor_data_array, 91);
-    sprintf(debugString, "%.3lf", ptToDeg);
-    lcd_puts(debugString);
-    cyBOT_Scan(ptToDeg, scan_data);
+    uart_sendChar(val);
+    return IDLE;
 }
 
-float evaluate_data(float data_array[], int arrLength) {
-    float start_dist = 0; // current object distance
-    float end_dist = 0;
-    int start_deg = 0; // current object angle
-    int end_deg = 0;
+States handle_manual(char val, oi_t *data, cyBOT_Scan_t *scan_data) {
+    switch (val) {
+        case 'm':
+            scan_full_arc(scan_data, 0, 180);
+            find_smallest_objects(scan_sensor_data_array, 0, 180, scan_data);
+            return IDLE;
+        case 'q':
+            scan_full_arc(scan_data, 45, 135);
+            find_smallest_objects(scan_sensor_data_array, 45, 135, scan_data);
+            return IDLE;
+        case 'e':
+            scan_full_arc(scan_data, 75, 105);
+            find_smallest_objects(scan_sensor_data_array, 75, 105, scan_data);
+            return IDLE;
+        case 'r':
+            adc_read();
+            return IDLE;
+        case 'w':
+            move_forward(data, 50, 120);
+            next_move.move = NONE;
+            if (data->bumpLeft) {
+                putty_printf("Bump Left - Obstacle Encountered\n");
+            } else if (data->bumpRight) {
+                putty_printf("Bump Right - Obstacle Encountered\n");
+            }
+            break;
+        case 's':
+            move_backward(data, 50, 120);
+            next_move.move = NONE;
+            break;
+        case 'a':
+            turn_counterclockwise(data, 10, 120);
+            next_move.move = NONE;
+            prev_full_scan = 0;
+            break;
+        case 'd':
+            turn_clockwise(data, 10, 120);
+            next_move.move = NONE;
+            prev_full_scan = 0;
+            break;
+        case 'c':
+            uart_sendStr("CLEAR\n");
+            break;
+        case ' ':
+            uart_sendStr("\n");
+            break;
+        default: break;
+    }
 
-    int in_object = 0;
+    return MANUAL;
+}
 
-    // Object_t smallest_object;
-    float smallest_obj_ctr_angle = 999.0;
-    float smallest_obj_lin_width = 999.0;
-    Object_t current_object;
+States handle_auto(char val, oi_t *data, cyBOT_Scan_t *scan_data) {
+    if (val != 'h') {
+        return IDLE;
+    }
 
-    int i = 1;
-    for (i = 1; i < arrLength; i++) {
-        // if distance is < 8% of prev. value, start object
-        if (!in_object && data_array[i] < 0.85 * data_array[i-1]) {
-            start_deg = i * 2; // starting degree
-            start_dist = data_array[i]; // initial angle
-            in_object = 1;
-        } else if (in_object && data_array[i] > 1.15 * data_array[i-1]) { // if distance is > 115% of prev. data item, end object
-            end_deg = (i-1) * 2;
-            end_dist = data_array[i-1];
+    int res;
+    if (next_move.move != NONE) {
+        switch (next_move.move) {
+            case FORWARD:
+                res = move_forward(data, next_move.amount, next_move.speed);
+                break;
+            case CW:
+                turn_clockwise(data, next_move.amount, next_move.speed);
+                res = next_move.amount;
+                break;
+            case CCW:
+                turn_counterclockwise(data, next_move.amount, next_move.speed);
+                res = next_move.amount;
+                break;
+            default: break;
+        }
 
-            in_object = 0;
-
-            current_object = create_object(start_dist, end_dist, start_deg, end_deg);
-
-            if (current_object.linear_width < 6) {
-                continue;
+        if (res < next_move.amount) {
+            if (data->bumpLeft) {
+                putty_printf("Bump Left - Obstacle Encountered\n");
+                move_backward(data, 50, next_move.speed);
+                turn_clockwise(data, 90, next_move.speed);
+                move_forward(data, 200, next_move.speed);
+                turn_counterclockwise(data, (atan(next_move.amount/200.0)*(180.0/PI)) + 90, next_move.speed);
             } else {
-                putty_send_object(&current_object);
-                timer_waitMillis(200);
+                putty_printf("Bump Right - Obstacle Encountered\n");
+                move_backward(data, 50, next_move.speed);
+                turn_counterclockwise(data, 90, next_move.speed);
+                move_forward(data, 200, next_move.speed);
+                turn_clockwise(data, (atan(next_move.amount/200.0)*(180.0/PI)) + 90, next_move.speed);
             }
-
-            if (current_object.linear_width < smallest_obj_lin_width) {
-                smallest_obj_lin_width = current_object.linear_width;
-                smallest_obj_ctr_angle = current_object.center_angle;
-            }
+            prev_full_scan = 0;
         }
     }
 
-    return smallest_obj_ctr_angle;
+    Object_t smallest;
+    if (!prev_full_scan) {
+        scan_full_arc(scan_data, 0, 180);
+        smallest = find_smallest_objects(scan_sensor_data_array, 0, 180, scan_data);
+        prev_full_scan = 1;
+    } else {
+        scan_full_arc(scan_data, 45, 135);
+        smallest = find_smallest_objects(scan_sensor_data_array, 45, 135, scan_data);
+    }
+
+    if (smallest.distance < 9) {
+        lcd_clear();
+        lcd_puts("Found!");
+
+    } else if (smallest.center_angle < 80 || smallest.center_angle > 100) {
+        if (smallest.center_angle > 90) {
+            next_move.move = CCW;
+            next_move.amount = smallest.center_angle - 90;
+            next_move.speed = 75;
+        } else {
+            next_move.move = CW;
+            next_move.amount = 90 - smallest.center_angle;
+            next_move.speed = 75;
+        }
+    } else {
+        next_move.move = FORWARD;
+        next_move.amount = (int) (smallest.distance * 10) - 100;
+        next_move.speed = 120;
+    }
+
+    return IDLE;
 }
