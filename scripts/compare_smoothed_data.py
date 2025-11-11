@@ -9,23 +9,10 @@ import matplotlib.pyplot as plt
 
 scan_queue = asyncio.Queue()
 object_queue = asyncio.Queue()
+bot_queue = asyncio.Queue()
 stop = asyncio.Event()
 
-in_scan = False
-
-class CyBotClientProtocol(asyncio.Protocol):
-    def __init__(self, on_con_lost):
-        self.on_con_lost = on_con_lost
-
-    def connection_made(self, transport):
-        print(f"Connected to server")
-
-    def data_recieved(self, data):
-        print(f"Data recieved {data}")
-
-    def connection_lost(self, exc):
-        print(f"Server closed the connection")
-        self.on_con_lost.set_result(True)
+in_scan = False    
 
 def create_polar_graph(ax, title):
     # Create a polar plot
@@ -43,6 +30,12 @@ def create_polar_graph(ax, title):
     # Create title for plot (font size = 14pt, y & pad controls title vertical location)
     ax.set_title(title, size=12, y=1.0, pad=-24) 
 
+def create_bot_graph(ax, title):
+    ax.set_xlim(-2, 2)
+    ax.set_ylim(-2, 2)
+    # Create title for plot (font size = 14pt, y & pad controls title vertical location)
+    ax.set_title(title, size=12, y=1.0) 
+
 def on_close(event):
     print("Matplot closed, exiting")
     stop.set()
@@ -54,7 +47,7 @@ async def read_stdin(con_writer):
 
     while not stop.is_set():
         val = await asyncio.to_thread(sys.stdin.readline)
-        con_writer.write(val.encode())
+        con_writer.write(val[:-1].encode())
 
 async def recieve_from_bot(con_reader):
     global in_scan
@@ -77,11 +70,14 @@ async def recieve_from_bot(con_reader):
         if line.startswith("CLEAR"):
             scan_queue.put_nowait(line)
             object_queue.put_nowait(line)
+            bot_queue.put_nowait(line)
         elif in_scan or line.startswith("STARTSCAN") or line.startswith("ENDSCAN"):
             scan_queue.put_nowait(line)
-            print("put")
         elif line.startswith("OBJECT"):
             object_queue.put_nowait(line)
+            bot_queue.put_nowait(line)
+        elif line.startswith("MOVE"):
+            bot_queue.put_nowait(line)
 
 
 async def update_scan_plot(ax):
@@ -89,14 +85,14 @@ async def update_scan_plot(ax):
     angle_degrees = None
     global in_scan
     index = 0
-    prev = None
+    prev = []
     line = None
     num_plots = 1
     while not stop.is_set():
         try:
             line = await asyncio.wait_for(scan_queue.get(), timeout=0.05)
         except asyncio.TimeoutError:
-            plt.pause(0.05)
+            plt.pause(0.02)
             continue
 
         if line.startswith("STARTSCAN"):
@@ -107,7 +103,7 @@ async def update_scan_plot(ax):
                     num_plots = int(line.split()[2])
 
             print(f"Beginning to plot {num_plots} scan(s). {count} entries")
-            distance = [np.empty(int(count), dtype=float)] * num_plots
+            distance = [np.empty(int(count), dtype=float) for _ in range(num_plots)]
             angle_degrees = np.empty(int(count), dtype=float) # Initally empty
             index = 0
             in_scan = True
@@ -116,7 +112,7 @@ async def update_scan_plot(ax):
             if prev:
                 for p in prev:
                     p.remove()
-                    p = None
+                prev.clear()
 
             for i in range(num_plots):
                 ax.plot(np.radians(angle_degrees), distance[i], linewidth=2.0)
@@ -127,16 +123,26 @@ async def update_scan_plot(ax):
         elif in_scan and (distance is not None and angle_degrees is not None):
             data = line.split()    # Split line into columns (by default delineates columns by whitespace)
             if len(data) > 1:
-                angle_degrees[index] = float(data[0].strip())  # Column 0 holds the angle at which distance was measured
+                angle = float(data[0].strip())  # Column 0 holds the angle at which distance was measured
+                if index > 0:
+                    if angle != angle_degrees[index - 1]:
+                        angle_degrees[index] = angle
+                    else:
+                        print("Correcting previous angle") # THIS IS PRINTING EVERY TIME
+                        index -= 1
+                else:
+                    angle_degrees[index] = angle
+                    
                 for i in range(num_plots):
-                    distance[i][index] = float(data[i + 1].strip()) / 100       # Column 1 holds the distance that was measured at a given angle
+                    distance[i][index] = float(data[i + 1].strip()) / 100       # Column 1 holds the distance that was measured at a given apple
 
                 if args.real_time:
                     for p in prev:
                         p.remove()
+                    prev.clear()
 
                     for i in range(num_plots):
-                        p, = ax.plot(np.radians(angle_degrees[:index]), distance[0][:index], color="grey", linewidth=2.0)
+                        p, = ax.plot(np.radians(angle_degrees[:index]), distance[i][:index], color="grey", linewidth=2.0)
                         prev.append(p)
                     plt.draw()
                 index += 1
@@ -144,7 +150,7 @@ async def update_scan_plot(ax):
             print("Clearing plots")
             ax.clear()
             create_polar_graph(ax, "CyBot Sensor Scan")
-            prev = None
+            prev = []
 
 async def update_object_plot(ax):
     line = None
@@ -152,7 +158,7 @@ async def update_object_plot(ax):
         try:
             line = await asyncio.wait_for(object_queue.get(), timeout=0.05)
         except asyncio.TimeoutError:
-            plt.pause(0.05)
+            plt.pause(0.02)
             continue
 
         if line.startswith("OBJECT"):
@@ -166,14 +172,80 @@ async def update_object_plot(ax):
             ax.clear()
             create_polar_graph(ax, "Objects (Not to scale)")
 
+async def update_bot_plt(ax):
+    bot_angle = np.radians(90)
+    bot_pos = (0, 0)
+    
+    bot = plt.Circle(bot_pos, 0.33, color='black', fill=None, linewidth=2) 
+    bot_line, = ax.plot([0, 0], [0, 0.33], color='black', linewidth=2.0)
+    ax.add_patch(bot)
+    plt.draw()
+    
+    while not stop.is_set():
+        try:
+            line = await asyncio.wait_for(bot_queue.get(), timeout=0.05)
+        except asyncio.TimeoutError:
+            plt.pause(0.02)
+            continue
+            
+        if line.startswith("MOVE"):
+            data = line.split()
+            forward_dist = int(data[1]) / 1000
+            angle_change = np.radians(int(data[2]))
+            if (forward_dist != 0):
+                x, y = bot_pos
+                x += np.cos(bot_angle) * forward_dist
+                y += np.sin(bot_angle) * forward_dist
+                bot_pos = (x, y)
+            elif (angle_change != 0):
+                bot_angle += angle_change
+            
+            bot.remove()
+            bot_line.remove()
+            bot = plt.Circle(bot_pos, 0.33, fill=None, linewidth=2)
+            bot_line, = ax.plot([bot_pos[0], bot_pos[0] + (0.33 * np.cos(bot_angle))], [bot_pos[1], bot_pos[1] + (0.33 * np.sin(bot_angle))], color='black', linewidth=2.0)
+            ax.add_patch(bot)
+            plt.draw()
+        if line.startswith("OBJECT"):
+            data = line.split()
+            angle =  np.radians(float(data[1].strip()))
+            distance = float(data[2].strip()) / 100
+            width = int(data[3].strip()) / 200
+            
+            x, y = bot_pos
+            
+            x += (0.166 * np.cos(bot_angle)) + (distance * np.cos(bot_angle + angle - np.radians(90))) + (width / 2)
+            y += (0.166 * np.sin(bot_angle)) + (distance * np.sin(bot_angle + angle - np.radians(90))) + (width / 2)
+            
+            circle = plt.Circle((x, y), width, color='green', fill=None, linewidth=1)
+            ax.add_patch(circle)
+            plt.draw()
+        elif line.startswith("CLEAR"):
+            ax.clear()
+            create_bot_graph(ax, "Area")
+            
+            bot_angle = np.radians(90)
+            bot_pos = (0, 0)
+            bot = plt.Circle(bot_pos, 0.33, color='black', fill=None, linewidth=2) 
+            bot_line, = ax.plot([0, 0], [0, 0.33], color='black', linewidth=2.0)
+            ax.add_patch(bot)
+            plt.draw()
+
+
 async def main():
     plt.ion()
-    fig, (scan_ax, object_ax) = plt.subplots(1, 2, subplot_kw={'projection': 'polar'})
+    fig = plt.figure(figsize=(10,8))
+    
+    scan_ax = fig.add_subplot(221, polar=True)
+    object_ax = fig.add_subplot(222, polar=True)
+    bot_ax = fig.add_subplot(223)
     fig.canvas.mpl_connect('close_event', on_close)
 
     create_polar_graph(scan_ax, "CyBot Sensor Scan")
     create_polar_graph(object_ax, "Objects (Not to scale)")
+    create_bot_graph(bot_ax, "Area")
 
+    plt.gca().set_aspect('equal')
     plt.show()  # Display plot
 
     con_reader, con_writer = await asyncio.open_connection("192.168.1.1", 288)
@@ -183,6 +255,7 @@ async def main():
         tg.create_task(recieve_from_bot(con_reader))
         tg.create_task(update_scan_plot(scan_ax))
         tg.create_task(update_object_plot(object_ax))
+        tg.create_task(update_bot_plt(bot_ax))
 
     plt.close(fig)
     print("Finished")
