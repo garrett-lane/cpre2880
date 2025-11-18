@@ -3,6 +3,7 @@
 #include "calibration.h"
 #include "cyBot_Scan.h"
 #include "driverlib/interrupt.h"
+#include "ir.h"
 #include "lcd.h"
 #include "movement.h"
 #include "open_interface.h"
@@ -123,80 +124,29 @@ void main()
     uart_init(115200);
     uart_interrupt_init();
     adc_init();
+    configure_reciever();
 
     set_servo_calibation(CALIBRATION_0_DEG, CALIBRATION_180_DEG);
 
     lcd_clear();
 
-    lcd_puts("V0.5");
+    lcd_puts("V0.6");
 
     States current_state = IDLE;
     next_move.move = NONE;
     prev_full_scan = 0;
 
-    char temp;
-    while (uart_data != '~') {
-        if (uart_flag) {
-            temp = uart_data;
-
-            if (temp == '\r') {
-                uart_sendChar('\n');
-                goto reset_uart_flag;
-            } else if (temp == '\n') {
-                goto reset_uart_flag;
-            }
-
-            switch (temp) {
-                case 'h':
-                    current_state = AUTO;
-                    break;
-                case 't':
-                    if (current_state == AUTO) {
-                        current_state = MANUAL;
-                    } else if (current_state == MANUAL) {
-                        current_state = AUTO;
-                    }
-                    break;
-                default:
-                    current_state = MANUAL;
-                    break;
-            }
-
-reset_uart_flag:
-            uart_flag = 0;
-        }
-
+    int temp;
+    adc_read();
+    while (1) {
         if (adc_flag) {
-            putty_printf("%d\n", adc_data);
-            float distCM = VTOCM_COEFF * pow(adc_data, VTOCM_EXP);
-            putty_printf("%.2f cm", distCM);
+            adc_read();
             adc_flag = 0;
         }
 
-        if (temp) {
-            lcd_clear();
-        }
-        switch (current_state) {
-            case IDLE:
-                if (temp) {
-                    lcd_puts("Idle");
-                }
-                current_state = handle_idle(temp);
-                break;
-            case MANUAL:
-                if (temp) {
-                    lcd_puts("Manual");
-                }
-                current_state = handle_manual(temp, data, &scan_data);
-                break;
-            case AUTO:
-                if (temp) {
-                    lcd_puts("Auto");
-                }
-                current_state = handle_auto(temp, data, &scan_data);
-                break;
-        }
-        temp = 0;
+        temp = read_reciever();
+        lcd_printf("reciever: %d ", temp);
+        timer_waitMillis(10);
     }
 
     //required end statement
