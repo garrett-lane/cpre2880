@@ -7,7 +7,7 @@ import threading
 os.environ["QT_API"] = "PySide6"
 
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QTextEdit, QSplitter
 )
 from PySide6.QtCore import QTimer, QObject, Signal, Slot
 from PySide6 import QtCore, QtNetwork
@@ -39,11 +39,22 @@ class MplCanvas(FigureCanvas):
         self.create_polar_graph(self.object_ax, "Objects (Not to scale)")
         self.create_bot_graph(self.bot_ax, "Area")
 
-        self.bot = plt.Circle(self.bot_pos, 0.33, color='black', fill=None, linewidth=2) 
-        self.bot_line, = self.bot_ax.plot([0, 0], [0, 0.33], color='black', linewidth=2.0)
+        self.bot = plt.Circle(self.bot_pos, 0.33 / 2, color='black', fill=None, linewidth=2) 
+        self.bot_line, = self.bot_ax.plot([0, 0], [0, 0.33 / 2], color='black', linewidth=2.0)
         self.bot_ax.add_patch(self.bot)
 
         super().__init__(fig)
+
+    def resizeEvent(self, event):
+        w = event.size().width()
+        h = event.size().height()
+        side = min(w, h)
+
+        # Resize the figure itself to be square inside the widget
+        dpi = self.figure.get_dpi()
+        self.figure.set_size_inches(side / dpi, side / dpi, forward=True)
+
+        super().resizeEvent(event)
 
     def create_polar_graph(self, ax, title):
         # Create a polar plot
@@ -62,8 +73,8 @@ class MplCanvas(FigureCanvas):
         ax.set_title(title, size=12, y=1.0, pad=-24) 
 
     def create_bot_graph(self, ax, title):
-        ax.set_xlim(-2, 2)
-        ax.set_ylim(-2, 2)
+        ax.set_xlim(-2.135, 2.135)
+        ax.set_ylim(-1.22, 1.22)
         # Create title for plot (font size = 14pt, y & pad controls title vertical location)
         ax.set_title(title, size=12, y=1.0) 
 
@@ -144,18 +155,18 @@ class MplCanvas(FigureCanvas):
             forward_dist = int(data[1]) / 1000
             angle_change = np.radians(int(data[2]))
             if (forward_dist != 0):
-                x, y = bot_pos
+                x, y = self.bot_pos
                 x += np.cos(self.bot_angle) * forward_dist
                 y += np.sin(self.bot_angle) * forward_dist
-                bot_pos = (x, y)
+                self.bot_pos = (x, y)
             elif (angle_change != 0):
                 self.bot_angle += angle_change
             
             self.bot.remove()
             self.bot_line.remove()
-            self.bot = plt.Circle(bot_pos, 0.33, fill=None, linewidth=2)
+            self.bot = plt.Circle(self.bot_pos, 0.33 / 2, fill=None, linewidth=2)
 
-            self.bot_line, = self.bot_ax.plot([self.bot_pos[0], self.bot_pos[0] + (0.33 * np.cos(self.bot_angle))], [self.bot_pos[1], self.bot_pos[1] + (0.33 * np.sin(self.bot_angle))], color='black', linewidth=2.0)
+            self.bot_line, = self.bot_ax.plot([self.bot_pos[0], self.bot_pos[0] + ((0.33 / 2) * np.cos(self.bot_angle))], [self.bot_pos[1], self.bot_pos[1] + ((0.33 / 2) * np.sin(self.bot_angle))], color='black', linewidth=2.0)
             self.bot_ax.add_patch(self.bot)
 
             self.draw()
@@ -192,8 +203,10 @@ class ClientManager(QObject):
     def on_stateChanged(self, state):
         if state == QtNetwork.QAbstractSocket.ConnectedState:
             print("connected")
+            self.new_message.emit("CONNECTED")
         elif state == QtNetwork.QAbstractSocket.UnconnectedState:
             print("disconnected")
+            self.new_message.emit("DISCONNECTED")
 
     def sendMessage(self, msg):
         print("sending")
@@ -203,10 +216,14 @@ class ClientManager(QObject):
 
     @Slot()
     def on_readyRead(self):
-        msg = self._socket.readAll().data().decode("utf-8").strip()
-        self.new_message.emit(msg)
+        raw = self._socket.readAll().data().decode("utf-8")
+        lines = raw.strip().splitlines()
+        for line in lines:
+            self.new_message.emit(line.strip())
 
 class MainWindow(QMainWindow):
+    busy = False
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -214,22 +231,35 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
 
         main_layout = QHBoxLayout(central_widget)
+        splitter = QSplitter(QtCore.Qt.Horizontal)
+        main_layout.addWidget(splitter)
 
         self.canvas = MplCanvas(self)
-        main_layout.addWidget(self.canvas, 5)
-        plt.gca().set_aspect('equal')
 
         button_layout = QVBoxLayout()
-        self.btn_pause = QPushButton("Scan")
+        self.btn_scan = QPushButton("Scan")
         self.btn_clear = QPushButton("Clear Plot")
+        self.input_line = QLineEdit()
         self.btn_exit = QPushButton("Exit")
 
-        button_layout.addWidget(self.btn_pause)
+        self.log_box = QTextEdit()
+        self.log_box.setReadOnly(True)
+        self.log_box.setMinimumHeight(200)
+
+        button_layout.addWidget(self.btn_scan)
         button_layout.addWidget(self.btn_clear)
-        button_layout.addStretch()
+        button_layout.addWidget(self.log_box)
+        button_layout.addWidget(self.input_line)
         button_layout.addWidget(self.btn_exit)
 
-        main_layout.addLayout(button_layout, 1)
+        right_panel = QWidget()
+        right_panel.setLayout(button_layout)
+
+        splitter.addWidget(self.canvas)
+        splitter.addWidget(right_panel)
+
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 2)
 
         self.client = ClientManager()
         self.client.launch()
@@ -239,14 +269,27 @@ class MainWindow(QMainWindow):
         self.timer.timeout.connect(self.update_plot)
         self.timer.start()
 
-        self.btn_pause.clicked.connect(self.scan_message)
+        self.btn_scan.clicked.connect(self.scan_message)
         self.btn_clear.clicked.connect(self.clear_plot)
         self.btn_exit.clicked.connect(QApplication.quit)
         self.client.new_message.connect(self.parse_message)
+        self.input_line.textChanged.connect(self.handle_input)
+
+        self.btn_scan.setEnabled(False)
+        self.btn_clear.setEnabled(False)
+        self.input_line.setEnabled(False)
 
         self.resize(900, 600)
         self.show()
 
+    def handle_input(self, text):
+        if not self.busy:
+            self.busy = True
+            self.input_line.setText(text[-1:])
+            self.client.sendMessage(text[-1:])
+        else:
+            self.input_line.setText(text[:-1])
+            self.log_box.setReadOnly(True)
 
     def update_plot(self):
        self.canvas.draw()
@@ -259,17 +302,30 @@ class MainWindow(QMainWindow):
 
     def parse_message(self, msg):
         print(msg)
+        self.log_box.append(msg)
 
-        if msg.startswith("CLEAR"):
+        if msg.startswith("ACK"):
+            self.busy = False
+            self.log_box.setReadOnly(False)
+        elif msg.startswith("CLEAR"):
+            self.busy = True
             self.canvas.update_scan_plot(msg)
             self.canvas.update_object_plot(msg)
         elif self.canvas.in_scan or msg.startswith("STARTSCAN") or msg.startswith("ENDSCAN"):
+            self.busy = True
             self.canvas.update_scan_plot(msg)
         elif msg.startswith("OBJECT"):
+            self.busy = True
             self.canvas.update_object_plot(msg)
             self.canvas.update_bot_plt(msg)
         elif msg.startswith("MOVE"):
+            self.busy = True
             self.canvas.update_bot_plt(msg)
+        elif msg.startswith("CONNECTED"):
+            self.btn_scan.setEnabled(True)
+            self.btn_clear.setEnabled(True)
+            self.input_line.setEnabled(True)
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
