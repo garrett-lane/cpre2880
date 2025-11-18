@@ -4,6 +4,7 @@
 #include "cyBot_Scan.h"
 #include "driverlib/interrupt.h"
 #include "lcd.h"
+#include "manual.h"
 #include "movement.h"
 #include "open_interface.h"
 #include "ping.h"
@@ -35,21 +36,10 @@ typedef struct planned_movement_t {
     int speed;
 } Planned_Movement;
 
-typedef enum states_e {
-    IDLE,
-    MANUAL,
-    AUTO
-} States;
-
 Planned_Movement next_move;
 int prev_full_scan;
 
-unsigned int dist;
-char string[10];
-
-States handle_idle(char val);
-States handle_manual(char val, oi_t *data, cyBOT_Scan_t *scan_data);
-States handle_auto(char val, oi_t *data, cyBOT_Scan_t *scan_data);
+int pos_x, pos_y, angle;
 
 void main()
 {
@@ -128,210 +118,12 @@ void main()
 
     lcd_clear();
 
-    lcd_puts("V0.5");
+    lcd_puts("V0.7");
 
-    States current_state = IDLE;
-    next_move.move = NONE;
-    prev_full_scan = 0;
-
-    char temp;
-    while (uart_data != '~') {
-        if (uart_flag) {
-            temp = uart_data;
-
-            if (temp == '\r') {
-                uart_sendChar('\n');
-                goto reset_uart_flag;
-            } else if (temp == '\n') {
-                goto reset_uart_flag;
-            }
-
-            switch (temp) {
-                case 'h':
-                    current_state = AUTO;
-                    break;
-                case 't':
-                    if (current_state == AUTO) {
-                        current_state = MANUAL;
-                    } else if (current_state == MANUAL) {
-                        current_state = AUTO;
-                    }
-                    break;
-                default:
-                    current_state = MANUAL;
-                    break;
-            }
-
-reset_uart_flag:
-            uart_flag = 0;
-        }
-
-        if (adc_flag) {
-            putty_printf("%d\n", adc_data);
-            float distCM = VTOCM_COEFF * pow(adc_data, VTOCM_EXP);
-            putty_printf("%.2f cm", distCM);
-            adc_flag = 0;
-        }
-
-        if (temp) {
-            lcd_clear();
-        }
-        switch (current_state) {
-            case IDLE:
-                if (temp) {
-                    lcd_puts("Idle");
-                }
-                current_state = handle_idle(temp);
-                break;
-            case MANUAL:
-                if (temp) {
-                    lcd_puts("Manual");
-                }
-                current_state = handle_manual(temp, data, &scan_data);
-                break;
-            case AUTO:
-                if (temp) {
-                    lcd_puts("Auto");
-                }
-                current_state = handle_auto(temp, data, &scan_data);
-                break;
-        }
-        temp = 0;
-    }
+#if MANUAL
+    run_manual(data, &scan_data);
+#endif
 
     //required end statement
     oi_free(data);
-}
-
-States handle_idle(char val) {
-    if (!val) {
-        return IDLE;
-    }
-    uart_sendChar(val);
-    return IDLE;
-}
-
-States handle_manual(char val, oi_t *data, cyBOT_Scan_t *scan_data) {
-    switch (val) {
-        case 'm':
-            scan_full_arc(scan_data, 0, 180);
-            find_smallest_objects(scan_sensor_data_array, 0, 180, scan_data);
-            return IDLE;
-        case 'q':
-            scan_full_arc(scan_data, 45, 135);
-            find_smallest_objects(scan_sensor_data_array, 45, 135, scan_data);
-            return IDLE;
-        case 'e':
-            scan_full_arc(scan_data, 75, 105);
-            find_smallest_objects(scan_sensor_data_array, 75, 105, scan_data);
-            return IDLE;
-        case 'r':
-            adc_read();
-            return IDLE;
-        case 'w':
-            move_forward(data, 50, 120);
-            next_move.move = NONE;
-            if (data->bumpLeft) {
-                putty_printf("Bump Left - Obstacle Encountered\n");
-            } else if (data->bumpRight) {
-                putty_printf("Bump Right - Obstacle Encountered\n");
-            }
-            break;
-        case 's':
-            move_backward(data, 50, 120);
-            next_move.move = NONE;
-            break;
-        case 'a':
-            turn_counterclockwise(data, 10, 120);
-            next_move.move = NONE;
-            prev_full_scan = 0;
-            break;
-        case 'd':
-            turn_clockwise(data, 10, 120);
-            next_move.move = NONE;
-            prev_full_scan = 0;
-            break;
-        case 'c':
-            uart_sendStr("CLEAR\n");
-            break;
-        case ' ':
-            uart_sendStr("\n");
-            break;
-        default: break;
-    }
-
-    return MANUAL;
-}
-
-States handle_auto(char val, oi_t *data, cyBOT_Scan_t *scan_data) {
-    if (val != 'h') {
-        return IDLE;
-    }
-
-    int res;
-    if (next_move.move != NONE) {
-        switch (next_move.move) {
-            case FORWARD:
-                res = move_forward(data, next_move.amount, next_move.speed);
-                break;
-            case CW:
-                turn_clockwise(data, next_move.amount, next_move.speed);
-                res = next_move.amount;
-                break;
-            case CCW:
-                turn_counterclockwise(data, next_move.amount, next_move.speed);
-                res = next_move.amount;
-                break;
-            default: break;
-        }
-
-        if (res < next_move.amount) {
-            if (data->bumpLeft) {
-                putty_printf("Bump Left - Obstacle Encountered\n");
-                move_backward(data, 50, next_move.speed);
-                turn_clockwise(data, 90, next_move.speed);
-                move_forward(data, 200, next_move.speed);
-                turn_counterclockwise(data, (atan(next_move.amount/200.0)*(180.0/PI)) + 90, next_move.speed);
-            } else {
-                putty_printf("Bump Right - Obstacle Encountered\n");
-                move_backward(data, 50, next_move.speed);
-                turn_counterclockwise(data, 90, next_move.speed);
-                move_forward(data, 200, next_move.speed);
-                turn_clockwise(data, (atan(next_move.amount/200.0)*(180.0/PI)) + 90, next_move.speed);
-            }
-            prev_full_scan = 0;
-        }
-    }
-
-    Object_t smallest;
-    if (!prev_full_scan) {
-        scan_full_arc(scan_data, 0, 180);
-        smallest = find_smallest_objects(scan_sensor_data_array, 0, 180, scan_data);
-        prev_full_scan = 1;
-    } else {
-        scan_full_arc(scan_data, 45, 135);
-        smallest = find_smallest_objects(scan_sensor_data_array, 45, 135, scan_data);
-    }
-
-    if (smallest.distance < 9) {
-        lcd_clear();
-        lcd_puts("Found!");
-
-    } else if (smallest.center_angle < 80 || smallest.center_angle > 100) {
-        if (smallest.center_angle > 90) {
-            next_move.move = CCW;
-            next_move.amount = smallest.center_angle - 90;
-            next_move.speed = 75;
-        } else {
-            next_move.move = CW;
-            next_move.amount = 90 - smallest.center_angle;
-            next_move.speed = 75;
-        }
-    } else {
-        next_move.move = FORWARD;
-        next_move.amount = (int) (smallest.distance * 10) - 100;
-        next_move.speed = 120;
-    }
-
-    return IDLE;
 }

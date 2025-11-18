@@ -58,14 +58,6 @@ unsigned int ping_read() {
         overflows++;
     }
 
-    char string[10];
-    snprintf(string, 9, "%d ", pulse);
-    lcd_puts(string);
-    snprintf(string, 10, "%7fs", pulse / 16000000.0);
-    lcd_puts(string);
-    snprintf(string, 9, " o:%d ", overflows);
-    lcd_puts(string);
-
     // ((delta / clock rate) * speed of light) / round trip
     return (unsigned int) (((pulse / 16000000.0) * 34300) / 2.0);
 }

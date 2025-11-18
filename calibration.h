@@ -13,8 +13,8 @@
 
 #include "open_interface.h"
 
-#define CALIBRATION_180_DEG 212
-#define CALIBRATION_0_DEG -87
+#define CALIBRATION_180_DEG 216
+#define CALIBRATION_0_DEG -104
 
 #define STRAIGHT_MULTIPLIER 1.0
 #define TURN_MULTIPLIER 0.9

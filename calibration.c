@@ -94,7 +94,7 @@ void calculate_power_regression(double *x, double *y, int num_values) {
 void calibrate_servo() {
     servo_move(0);
 
-    char string[15];
+    char string[50];
     int degree_modification = 0;
     int dir = 1; // 0 for counter, 1 for clockwise
     int cc = 0;
@@ -165,13 +165,13 @@ void calibrate_servo() {
 
 
     lcd_clear();
-    snprintf(string, 12, "0 deg: %3d\n", correct_zero);
+    snprintf(string, 20, "0 deg: %3d\r\n", correct_zero);
     lcd_puts(string);
-    putty_puts(string, 13);
+    putty_puts(string, 21);
 
-    snprintf(string, 14, "180 deg: %3d\n", correct_one_eighty);
+    snprintf(string, 20, "180 deg: %3d\r\n", correct_one_eighty);
     lcd_puts(string);
-    putty_puts(string, 15);
+    putty_puts(string, 21);
 
     set_servo_calibation(correct_zero, correct_one_eighty);
 }

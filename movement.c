@@ -18,6 +18,10 @@ int move(oi_t *sensor, int distance_mm, int speed_mm, int forward) {
         if (forward && (sensor->bumpLeft || sensor->bumpRight)) {
             break;
         }
+
+        if (sensor->cliffLeft || sensor->cliffFrontLeft || sensor->cliffFrontRight || sensor->cliffFrontRight) {
+            break;
+        }
     }
     oi_setWheels(0,0); // stop
     oi_update(sensor);
