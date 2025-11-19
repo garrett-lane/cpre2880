@@ -120,15 +120,14 @@ class MplCanvas(FigureCanvas):
                 for i in range(self.num_plots):
                     self.distance[i][self.index] = float(data[i + 1].strip()) / 100       # Column 1 holds the distance that was measured at a given apple
 
-                # if args.real_time:
-                #     for p in prev:
-                #         p.remove()
-                #     prev.clear()
+                for p in self.prev:
+                    p.remove()
+                self.prev.clear()
 
-                #     for i in range(num_plots):
-                #         p, = ax.plot(np.radians(angle_degrees[:index]), distance[i][:index], color="grey", linewidth=2.0)
-                #         prev.append(p)
-                #     plt.draw()
+                for i in range(self.num_plots):
+                    p, = self.scan_ax.plot(np.radians(self.angle_degrees[:self.index]), self.distance[i][:self.index], color="grey", linewidth=2.0)
+                    self.prev.append(p)
+                self.draw()
                 self.index += 1
         elif line.startswith("CLEAR"):
             print("Clearing plots")
@@ -212,7 +211,7 @@ class ClientManager(QObject):
         print("sending")
         if self._socket.state() == QtNetwork.QAbstractSocket.ConnectedState:
             print("sent")
-            self._socket.write(msg.encode("utf-8")) 
+            self._socket.write(msg.to_bytes(1)) 
 
     @Slot()
     def on_readyRead(self):
@@ -285,20 +284,42 @@ class MainWindow(QMainWindow):
     def handle_input(self, text):
         if not self.busy:
             self.busy = True
-            self.input_line.setText(text[-1:])
-            self.client.sendMessage(text[-1:])
+
+            c = text[-1:]
+            self.input_line.setText(c)
+            match c:
+                case 'w':
+                    self.client.sendMessage(0b00000000)
+                case 's':
+                    self.client.sendMessage(0b00010000)
+                case 'a':
+                    self.client.sendMessage(0b00100000)
+                case 'd':
+                    self.client.sendMessage(0b00110000)
+                case 'm':
+                    self.scan_message()
+                case _:
+                    self.busy = False
         else:
             self.input_line.setText(text[:-1])
-            self.log_box.setReadOnly(True)
 
     def update_plot(self):
-       self.canvas.draw()
+        if self.busy:
+            self.btn_scan.setEnabled(False)
+            self.btn_clear.setEnabled(False)
+        else:
+            self.btn_scan.setEnabled(True)
+            self.btn_clear.setEnabled(True)
+
+        self.canvas.draw()
 
     def scan_message(self):
-        self.client.sendMessage("m")
+        self.busy = True
+        self.client.sendMessage(0b01111000)
 
     def clear_plot(self):
-        self.client.sendMessage("c")
+        self.busy = True
+        self.client.sendMessage(0b11000001)
 
     def parse_message(self, msg):
         print(msg)
@@ -306,7 +327,6 @@ class MainWindow(QMainWindow):
 
         if msg.startswith("ACK"):
             self.busy = False
-            self.log_box.setReadOnly(False)
         elif msg.startswith("CLEAR"):
             self.busy = True
             self.canvas.update_scan_plot(msg)
