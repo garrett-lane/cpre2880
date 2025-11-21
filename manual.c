@@ -20,59 +20,103 @@
 
 int run_manual(oi_t *data, cyBOT_Scan_t *scan_data) {
     char temp;
+    int left_angle, right_angle;
+
     while (uart_data != '~') {
         if (uart_flag) {
             temp = uart_data;
+            uart_flag = 0;
 
-            if (temp == '\r') {
-                uart_sendChar('\n');
-                goto reset_uart_flag;
-            } else if (temp == '\n') {
-                goto reset_uart_flag;
-            }
-
-            switch (temp) {
-                case 'm':
-                    scan_full_arc(scan_data, 0, 180);
-                    find_smallest_objects(scan_sensor_data_array, 0, 180, scan_data);
-                    break;
-                case 'q':
-                    scan_full_arc(scan_data, 45, 135);
-                    find_smallest_objects(scan_sensor_data_array, 45, 135, scan_data);
-                    break;
-                case 'e':
-                    scan_full_arc(scan_data, 75, 105);
-                    find_smallest_objects(scan_sensor_data_array, 75, 105, scan_data);
-                    break;
-                case 'w':
-                    move_forward(data, 50, 120);
-                    if (data->bumpLeft) {
-                        putty_printf("Bump Left - Obstacle Encountered\n");
-                    } else if (data->bumpRight) {
-                        putty_printf("Bump Right - Obstacle Encountered\n");
+            switch ((temp & 0xC0) >> 6) {
+                case 0b00:
+                    // Movement
+                    switch ((temp >> 4) & 0x3) {
+                        case 0b00:
+                            // Foward
+                            move_forward(data, 50, 120);
+                            if (data->bumpLeft) {
+                                putty_printf("BUMP 0\n");
+                            } else if (data->bumpRight) {
+                                putty_printf("BUMP 1\n");
+                            }
+                            break;
+                        case 0b01:
+                            // Backward
+                            move_backward(data, 50, 120);
+                            break;
+                        case 0b10:
+                            // Left
+                            turn_counterclockwise(data, 10, 120);
+                            break;
+                        case 0b11:
+                            // Right
+                            turn_clockwise(data, 10, 120);
+                            break;
                     }
                     break;
-                case 's':
-                    move_backward(data, 50, 120);
+                case 0b01:
+                    // Scan
+                    left_angle = 13 * (temp & 0x7);
+                    if (left_angle > 90) {
+                        left_angle = 90;
+                    }
+                    right_angle = 13 * ((temp >> 3) & 0x7) + 90;
+                    if (right_angle > 180) {
+                        right_angle = 180;
+                    }
+
+                    scan_full_arc(scan_data, left_angle, right_angle);
+                    find_smallest_objects(scan_sensor_data_array, left_angle, right_angle, scan_data);
                     break;
-                case 'a':
-                    turn_counterclockwise(data, 10, 120);
+                case 0b10:
+                    // Position
+                    // Set base position
+                    if (!(temp & 0x20)) {
+                        // 130 mm * x
+                        pos_x = 67 * (temp & 0x1F);
+                        pos_y = 0;
+                    } else {
+                        // Set angle
+                        if (!(temp & 0x10)) {
+                            if ((temp & 0x0F) == 0x1) {
+                                pos_angle = 0;
+                            } else if ((temp & 0x0F) == 0x2) {
+                                pos_angle = 90;
+                            } else if ((temp & 0x0F) == 0x4) {
+                                pos_angle = 180;
+                            } else if ((temp & 0x0F) == 0x8) {
+                                pos_angle = 270;
+                            }
+                        } else {
+                            if ((temp & 0x0F) == 0x8) {
+                                // Invert X
+                                pos_x = -pos_x;
+                            } else if ((temp & 0x0F) < 0x8) {
+                                // Add x centimeters to x
+                                pos_x += temp & 0x07;
+                            } else if ((temp & 0x0F) > 0x8) {
+                                // Sub x centimeters to x
+                                pos_x -= temp & 0x07;
+                            }
+                        }
+                    }
+                    putty_send_pos();
                     break;
-                case 'd':
-                    turn_clockwise(data, 10, 120);
-                    break;
-                case 'c':
-                    uart_sendStr("CLEAR\n");
-                    break;
-                case ' ':
-                    uart_sendStr("\n");
+                case 0b11:
+                    // Misc
+                    switch (temp & 0x3F) {
+                        case 0x01:
+                            uart_sendStr("CLEAR\n");
+                            break;
+                        default: break;
+                    }
                     break;
                 default: break;
             }
 
-reset_uart_flag:
-            uart_flag = 0;
-            putty_printf("ACK\n");
+            lcd_printf("Pos x%d y%d d%d", pos_x, pos_y, pos_angle);
+
+            uart_sendStr("ACK\n");
         }
     }
 

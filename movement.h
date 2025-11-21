@@ -9,6 +9,8 @@
 #define MOVEMENT_H_
 #include "open_interface.h"
 
+int pos_x, pos_y, pos_angle;
+
 // Drive FORWARD in a straight line for distance_mm MILLIMETERS at speed_mm MM/S. All values should always be POSITIVE.
 int move_forward(oi_t *sensor, int distance_mm, int speed_mm);
 

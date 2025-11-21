@@ -1,0 +1,24 @@
+Movement: 00
+00 00 0000 forward
+00 01 0000 backward
+00 10 0000 left 
+00 11 0000 right
+
+Scan: 01
+01 xxx xxx scan range
+01 000 000 scan 0-90
+01 111 000 scan 0-180
+01 000 111 scan 90-90
+01 011 011 scan 39-129
+01 111 111 scan 90-180
+
+Position: 10
+10 0 00000 set x position on 6.7 cm intervals
+10 10 0000 set angle (0, 90, 180, 270)
+10 11 1000 negative x invert
+10 11 0xxx add x centimeters to x position
+10 11 1xxx subtract x centimeters to x position
+
+Other: 11
+11 000 000 ack
+11 000 001 reset

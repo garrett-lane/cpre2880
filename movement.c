@@ -3,6 +3,9 @@
 #include "putty.h"
 #include "calibration.h"
 
+#include <math.h>
+#define PI 3.14159
+
 int move(oi_t *sensor, int distance_mm, int speed_mm, int forward) {
     if (!sensor) {
         return -500; // Return error state if sensor is null
@@ -27,7 +30,10 @@ int move(oi_t *sensor, int distance_mm, int speed_mm, int forward) {
     oi_update(sensor);
     dist += sensor->distance;
 
-    putty_printf("MOVE %d 0\n", (int) dist);
+    pos_x += cos(pos_angle * (PI / 180.0)) * dist;
+    pos_y += sin(pos_angle * (PI / 180.0)) * dist;
+    putty_send_pos();
+
     if (forward) {
         return dist; // returns MILLIMETERS
     } else {
@@ -64,7 +70,9 @@ int turn(oi_t *sensor, int degrees, int speed_mm, int turn_cw) {
     }
     oi_setWheels(0,0); // stop
 
-    putty_printf("MOVE 0 %d\n", (int) ang);
+    pos_angle += ang;
+    putty_send_pos();
+
     if (turn_cw) {
         return -ang;  // returns DEGREES
     } else {

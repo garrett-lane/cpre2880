@@ -95,14 +95,9 @@ void process_noisy_data(int angle, cyBOT_Scan_t *scan_data) {
     scan_sensor_data_array[scan_index] = obj;
 
 process_noisy_data_exit:
-#if DEBUG
-    //putty_send_scan_data(angle, scan_data);
-    putty_printf("%3d\t%10f\t%10d\n", angle, scan_sensor_data_array[scan_index].sound_dist, scan_sensor_data_array[scan_index].IR_raw_val);
+    putty_send_scan_data(angle, &scan_sensor_data_array[scan_index]);
     lcd_clear();
     lcd_printf("%3d %5f %5d\n", angle, scan_sensor_data_array[scan_index].sound_dist, scan_sensor_data_array[scan_index].IR_raw_val);
-#else
-    putty_printf("%3d\t%10f\t%10d\n", angle, scan_sensor_data_array[scan_index].sound_dist, scan_sensor_data_array[scan_index].IR_raw_val);
-#endif
     scan_index++;
 }
 
@@ -114,7 +109,7 @@ void get_center_distance(int angle, cyBOT_Scan_t *scan_data) {
 
 void scan_full_arc(cyBOT_Scan_t *scan_data, int start_angle, int stop_angle) {
     servo_move(start_angle);
-    timer_waitMillis(1000);
+    timer_waitMillis(500);
     putty_printf("STARTSCAN %d 2\n", ((stop_angle - start_angle) / 2) + 1);
     timer_waitMillis(100);
     scan_range(start_angle, stop_angle, 2, scan_data, process_noisy_data, 3);

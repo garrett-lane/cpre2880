@@ -13,6 +13,7 @@
 
 void putty_send_object(Object_t *object);
 void putty_send_scan_data(int angle, cyBOT_Scan_t *scan_data);
+void putty_send_pos();
 
 void putty_puts(char string[], int length);
 

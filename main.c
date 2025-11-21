@@ -39,8 +39,6 @@ typedef struct planned_movement_t {
 Planned_Movement next_move;
 int prev_full_scan;
 
-int pos_x, pos_y, angle;
-
 void main()
 {
     // Servo Calibration Code
@@ -118,10 +116,12 @@ void main()
 
     lcd_clear();
 
-    lcd_puts("V0.7");
+    lcd_puts("V0.8");
 
 #if MANUAL
     run_manual(data, &scan_data);
+#elif AUTO
+    // PUT AUTO CODE HERE
 #endif
 
     //required end statement
