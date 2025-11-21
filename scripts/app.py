@@ -7,7 +7,7 @@ import threading
 os.environ["QT_API"] = "PySide6"
 
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QTextEdit, QSplitter
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QTextEdit, QSplitter, QDialog
 )
 from PySide6.QtCore import QTimer, QObject, Signal, Slot
 from PySide6 import QtCore, QtNetwork
@@ -17,6 +17,10 @@ from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 
 import numpy as np
+
+class SetupDialog(QDialog):
+    def __init__(self):
+        super().__init__()
 
 class MplCanvas(FigureCanvas):
     distance = None
@@ -149,27 +153,13 @@ class MplCanvas(FigureCanvas):
             self.create_polar_graph(self.object_ax, "Objects (Not to scale)")
 
     def update_bot_plt(self, line):
-        if line.startswith("MOVE"):
+        if line.startswith("POS"):
             data = line.split()
-            forward_dist = int(data[1]) / 1000
-            angle_change = np.radians(int(data[2]))
-            if (forward_dist != 0):
-                x, y = self.bot_pos
-                x += np.cos(self.bot_angle) * forward_dist
-                y += np.sin(self.bot_angle) * forward_dist
-                self.bot_pos = (x, y)
-            elif (angle_change != 0):
-                self.bot_angle += angle_change
-            
-            self.bot.remove()
-            self.bot_line.remove()
-            self.bot = plt.Circle(self.bot_pos, 0.33 / 2, fill=None, linewidth=2)
+            self.bot_pos = (int(data[1]) / 1000, int(data[2]) / 1000)
+            self.bot_angle = np.radians(int(data[3]))
 
-            self.bot_line, = self.bot_ax.plot([self.bot_pos[0], self.bot_pos[0] + ((0.33 / 2) * np.cos(self.bot_angle))], [self.bot_pos[1], self.bot_pos[1] + ((0.33 / 2) * np.sin(self.bot_angle))], color='black', linewidth=2.0)
-            self.bot_ax.add_patch(self.bot)
-
-            self.draw()
-        if line.startswith("OBJECT"):
+            self.draw_bot()
+        elif line.startswith("OBJECT"):
             data = line.split()
             angle =  np.radians(float(data[1].strip()))
             distance = float(data[2].strip()) / 100
@@ -185,7 +175,19 @@ class MplCanvas(FigureCanvas):
 
             self.draw()
 
+    def draw_bot(self):
+        if self.bot:
+            self.bot.remove()
+            self.bot_line.remove()
+        self.bot = plt.Circle(self.bot_pos, 0.33 / 2, fill=None, linewidth=2)
+
+        self.bot_line, = self.bot_ax.plot([self.bot_pos[0], self.bot_pos[0] + ((0.33 / 2) * np.cos(self.bot_angle))], [self.bot_pos[1], self.bot_pos[1] + ((0.33 / 2) * np.sin(self.bot_angle))], color='black', linewidth=2.0)
+        self.bot_ax.add_patch(self.bot)
+
+        self.draw()
+
 class ClientManager(QObject):
+    connected = Signal()
     new_message = Signal(str)
 
     def __init__(self, parent=None):
@@ -202,10 +204,9 @@ class ClientManager(QObject):
     def on_stateChanged(self, state):
         if state == QtNetwork.QAbstractSocket.ConnectedState:
             print("connected")
-            self.new_message.emit("CONNECTED")
+            self.connected.emit()
         elif state == QtNetwork.QAbstractSocket.UnconnectedState:
             print("disconnected")
-            self.new_message.emit("DISCONNECTED")
 
     def sendMessage(self, msg):
         print("sending")
@@ -222,6 +223,7 @@ class ClientManager(QObject):
 
 class MainWindow(QMainWindow):
     busy = False
+    setup_state = 0
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -272,14 +274,19 @@ class MainWindow(QMainWindow):
         self.btn_clear.clicked.connect(self.clear_plot)
         self.btn_exit.clicked.connect(QApplication.quit)
         self.client.new_message.connect(self.parse_message)
+        self.client.connected.connect(self.connect_cybot)
         self.input_line.textChanged.connect(self.handle_input)
 
         self.btn_scan.setEnabled(False)
         self.btn_clear.setEnabled(False)
         self.input_line.setEnabled(False)
 
+        # self.setup = SetupDialog()
+
         self.resize(900, 600)
         self.show()
+
+        # self.setup.open()
 
     def handle_input(self, text):
         if not self.busy:
@@ -327,6 +334,8 @@ class MainWindow(QMainWindow):
 
         if msg.startswith("ACK"):
             self.busy = False
+            if self.setup_state >= 0:
+                self.connect_cybot()
         elif msg.startswith("CLEAR"):
             self.busy = True
             self.canvas.update_scan_plot(msg)
@@ -338,14 +347,24 @@ class MainWindow(QMainWindow):
             self.busy = True
             self.canvas.update_object_plot(msg)
             self.canvas.update_bot_plt(msg)
-        elif msg.startswith("MOVE"):
+        elif msg.startswith("POS"):
             self.busy = True
             self.canvas.update_bot_plt(msg)
-        elif msg.startswith("CONNECTED"):
-            self.btn_scan.setEnabled(True)
-            self.btn_clear.setEnabled(True)
-            self.input_line.setEnabled(True)
 
+    def connect_cybot(self):
+        self.btn_scan.setEnabled(True)
+        self.btn_clear.setEnabled(True)
+        self.input_line.setEnabled(True)
+
+        if self.setup_state == 0:
+            self.client.sendMessage(0b10011111)
+            self.setup_state = 1
+        elif self.setup_state == 1:
+            self.client.sendMessage(0b10100000)
+            self.setup_state = 2
+        elif self.setup_state == 2:
+            self.client.sendMessage(0b10111000)
+            self.setup_state = -1
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
