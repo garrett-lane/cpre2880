@@ -1,10 +1,5 @@
 import os
 import sys
-import random
-import socket
-import threading
-
-os.environ["QT_API"] = "PySide6"
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QTextEdit, QSplitter, QDialog
@@ -18,9 +13,13 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
+os.environ["QT_API"] = "PySide6"
+
+
 class SetupDialog(QDialog):
     def __init__(self):
         super().__init__()
+
 
 class MplCanvas(FigureCanvas):
     distance = None
@@ -34,7 +33,7 @@ class MplCanvas(FigureCanvas):
 
     def __init__(self, parent=None, width=10, height=8, dpi=100):
         fig = Figure(figsize=(width, height), dpi=dpi)
-    
+
         self.scan_ax = fig.add_subplot(221, polar=True)
         self.object_ax = fig.add_subplot(222, polar=True)
         self.bot_ax = fig.add_subplot(223)
@@ -43,7 +42,7 @@ class MplCanvas(FigureCanvas):
         self.create_polar_graph(self.object_ax, "Objects (Not to scale)")
         self.create_bot_graph(self.bot_ax, "Area")
 
-        self.bot = plt.Circle(self.bot_pos, 0.33 / 2, color='black', fill=None, linewidth=2) 
+        self.bot = plt.Circle(self.bot_pos, 0.33 / 2, color='black', fill=None, linewidth=2)
         self.bot_line, = self.bot_ax.plot([0, 0], [0, 0.33 / 2], color='black', linewidth=2.0)
         self.bot_ax.add_patch(self.bot)
 
@@ -62,25 +61,22 @@ class MplCanvas(FigureCanvas):
 
     def create_polar_graph(self, ax, title):
         # Create a polar plot
-        ax.set_xlabel('Distance (m)', fontsize = 12.0)  # Label x axis
-        ax.set_ylabel('Angle (degrees)', fontsize = 12.0) # Label y axis
-        ax.xaxis.set_label_coords(0.5, 0.15) # Modify location of x axis label (Typically do not need or want this)
-        ax.tick_params(axis='both', which='major', labelsize=14) # set font size of tick labels
+        ax.set_xlabel('Distance (m)', fontsize=12.0)  # Label x axis
+        ax.set_ylabel('Angle (degrees)', fontsize=12.0)  # Label y axis
+        ax.xaxis.set_label_coords(0.5, 0.15)  # Modify location of x axis label (Typically do not need or want this)
+        ax.tick_params(axis='both', which='major', labelsize=14)  # set font size of tick labels
         ax.set_rlim(0.0, 2.5)
-        ax.set_rticks([0.5, 1, 1.5, 2, 2.5])   # Set plot "distance" tick marks at .5, 1, 1.5, 2, and 2.5 meters
-        ax.set_rlabel_position(-22.5)     # Adjust location of the radial labels
-        ax.set_thetamax(180)              # Saturate angle to 180 degrees
-        ax.set_xticks(np.arange(0,np.pi+.1,np.pi/4)) # Set plot "angle" tick marks to pi/4 radians (i.e., displayed at 45 degree) increments
-                                                     # Note: added .1 to pi to go just beyond pi (i.e., 180 degrees) so that 180 degrees is displayed
-        ax.grid(True)                     # Show grid lines
-        # Create title for plot (font size = 14pt, y & pad controls title vertical location)
-        ax.set_title(title, size=12, y=1.0, pad=-24) 
+        ax.set_rticks([0.5, 1, 1.5, 2, 2.5])  # Set plot "distance" tick marks at .5, 1, 1.5, 2, and 2.5 meters
+        ax.set_rlabel_position(-22.5)  # Adjust location of the radial labels
+        ax.set_thetamax(180)  # Saturate angle to 180 degrees
+        ax.set_xticks(np.arange(0, np.pi + .1, np.pi / 4))  # Set plot "angle" tick marks to pi/4 radians (i.e., displayed at 45 degree) increments
+        ax.grid(True)  # Show grid lines
+        ax.set_title(title, size=12, y=1.0, pad=-24)
 
     def create_bot_graph(self, ax, title):
         ax.set_xlim(-2.135, 2.135)
         ax.set_ylim(-1.22, 1.22)
-        # Create title for plot (font size = 14pt, y & pad controls title vertical location)
-        ax.set_title(title, size=12, y=1.0) 
+        ax.set_title(title, size=12, y=1.0)
 
     def update_scan_plot(self, line):
         if line.startswith("STARTSCAN"):
@@ -92,7 +88,7 @@ class MplCanvas(FigureCanvas):
 
             print(f"Beginning to plot {self.num_plots} scan(s). {count} entries")
             self.distance = [np.empty(int(count), dtype=float) for _ in range(self.num_plots)]
-            self.angle_degrees = np.empty(int(count), dtype=float) # Initally empty
+            self.angle_degrees = np.empty(int(count), dtype=float)  # Initally empty
             self.index = 0
             self.in_scan = True
         elif line.startswith("ENDSCAN"):
@@ -120,9 +116,9 @@ class MplCanvas(FigureCanvas):
                         self.index -= 1
                 else:
                     self.angle_degrees[self.index] = angle
-                    
+
                 for i in range(self.num_plots):
-                    self.distance[i][self.index] = float(data[i + 1].strip()) / 100       # Column 1 holds the distance that was measured at a given apple
+                    self.distance[i][self.index] = float(data[i + 1].strip()) / 100
 
                 for p in self.prev:
                     p.remove()
@@ -161,15 +157,15 @@ class MplCanvas(FigureCanvas):
             self.draw_bot()
         elif line.startswith("OBJECT"):
             data = line.split()
-            angle =  np.radians(float(data[1].strip()))
+            angle = np.radians(float(data[1].strip()))
             distance = float(data[2].strip()) / 100
             width = int(data[3].strip()) / 200
-            
+
             x, y = self.bot_pos
-            
+
             x += (0.166 * np.cos(self.bot_angle)) + (distance * np.cos(self.bot_angle + angle - np.radians(90))) + (width / 2)
             y += (0.166 * np.sin(self.bot_angle)) + (distance * np.sin(self.bot_angle + angle - np.radians(90))) + (width / 2)
-            
+
             circle = plt.Circle((x, y), width, color='green', fill=None, linewidth=1)
             self.bot_ax.add_patch(circle)
 
@@ -185,6 +181,7 @@ class MplCanvas(FigureCanvas):
         self.bot_ax.add_patch(self.bot)
 
         self.draw()
+
 
 class ClientManager(QObject):
     connected = Signal()
@@ -212,7 +209,7 @@ class ClientManager(QObject):
         print("sending")
         if self._socket.state() == QtNetwork.QAbstractSocket.ConnectedState:
             print("sent")
-            self._socket.write(msg.to_bytes(1)) 
+            self._socket.write(msg.to_bytes(1))
 
     @Slot()
     def on_readyRead(self):
@@ -220,6 +217,7 @@ class ClientManager(QObject):
         lines = raw.strip().splitlines()
         for line in lines:
             self.new_message.emit(line.strip())
+
 
 class MainWindow(QMainWindow):
     busy = False
@@ -366,8 +364,8 @@ class MainWindow(QMainWindow):
             self.client.sendMessage(0b10111000)
             self.setup_state = -1
 
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
     app.exec()
-
