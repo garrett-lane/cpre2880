@@ -2,10 +2,10 @@ import os
 import sys
 
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QTextEdit, QSplitter, QDialog
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QTextEdit, QSplitter, QDialog, QComboBox, QSpinBox, QLabel, QDialogButtonBox
 )
 from PySide6.QtCore import QTimer, QObject, Signal, Slot
-from PySide6 import QtCore, QtNetwork
+from PySide6 import QtCore, QtNetwork, Qt
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -17,8 +17,81 @@ os.environ["QT_API"] = "PySide6"
 
 
 class SetupDialog(QDialog):
-    def __init__(self):
-        super().__init__()
+    other_bot = "Manual"
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setWindowTitle("Configure Bots")
+
+        self.bot_combo = QComboBox()
+        self.bot_combo.addItems(["Auto", "Manual"])
+
+        self.facing_combo = QComboBox()
+        self.facing_combo.addItems([
+            "the same direction as",
+            "towards",
+            "opposite direction of",
+            "away from",
+        ])
+        self.facing_label = QLabel(f"{self.other_bot} bot.")
+
+        self.distance_spin = QSpinBox()
+        self.distance_spin.setRange(0, 500)
+        self.distance_spin.setSuffix(" cm")
+        self.distance_spin.setValue(10)
+
+        self.side_combo = QComboBox()
+        self.side_combo.addItems(["left", "right"])
+        self.side_label = QLabel(f"of {self.other_bot} bot.")
+
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+
+        row_bot = QHBoxLayout()
+        row_bot.addWidget(QLabel("Selected Bot:"))
+        row_bot.addWidget(self.bot_combo)
+
+        row_facing = QHBoxLayout()
+        row_facing.addWidget(QLabel("Facing:"))
+        row_facing.addWidget(self.facing_combo)
+        row_facing.addWidget(self.facing_label)
+
+        row_distance = QHBoxLayout()
+        row_distance.addWidget(QLabel("Distance:"))
+        row_distance.addWidget(self.distance_spin)
+        row_distance.addWidget(QLabel("to the"))
+        row_distance.addWidget(self.side_combo)
+        row_distance.addWidget(self.side_label)
+
+        main_layout = QVBoxLayout()
+        main_layout.addLayout(row_bot)
+        main_layout.addLayout(row_facing)
+        main_layout.addLayout(row_distance)
+        main_layout.addWidget(button_box)
+
+        self.setLayout(main_layout)
+
+        self.bot_combo.currentIndexChanged.connect(self.update_label)
+
+    def update_label(self):
+        bot = self.bot_combo.currentText()
+        if bot == "Auto":
+            self.other_bot = "Manual"
+        else:
+            self.other_bot = "Auto"
+
+        self.side_label.setText(f"of {self.other_bot} bot.")
+        self.facing_label.setText(f"{self.other_bot} bot.")
+
+    def calculate_distance(self):
+        distance = self.distance_spin.value()
+        val = int(distance / 6.7)
+        extra = int(distance % 6.7)
+        if int((val * 6.7) + extra) != distance:
+            print("misalign")
+        print(f"{distance} - {val} + {extra} - {bytes(val)} + {bytes(extra)}")
 
 
 class MplCanvas(FigureCanvas):
@@ -91,6 +164,10 @@ class MplCanvas(FigureCanvas):
             self.angle_degrees = np.empty(int(count), dtype=float)  # Initally empty
             self.index = 0
             self.in_scan = True
+
+            self.scan_ax.clear()
+            self.create_polar_graph(self.scan_ax, "CyBot Sensor Scan")
+            self.prev = []
         elif line.startswith("ENDSCAN"):
             print("Drawing final scan")
             if self.prev:
@@ -186,16 +263,64 @@ class MplCanvas(FigureCanvas):
 class ClientManager(QObject):
     connected = Signal()
     new_message = Signal(str)
+    error = Signal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, iface_name: str = "wlp193s0f3u1", parent=None):
         super(ClientManager, self).__init__(parent)
 
+        self._iface_name = iface_name
         self._socket = QtNetwork.QTcpSocket(self)
+
         self._socket.stateChanged.connect(self.on_stateChanged)
         self._socket.readyRead.connect(self.on_readyRead)
+        self._socket.errorOccurred.connect(self.on_error)
 
-    def launch(self):
-        return self._socket.connectToHost(QtNetwork.QHostAddress("192.168.1.1"), 288)
+    # --- public API -------------------------------------------------------
+
+    def launch(self) -> bool:
+        """
+        Bind to the IPv4 address of self._iface_name, then connect to 192.168.1.1:288.
+        Returns True if the connect was initiated, False if something failed early.
+        """
+        local_addr = self._get_iface_ipv4()
+        if local_addr is None:
+            msg = f"No valid IPv4 address found on interface {self._iface_name}"
+            print(msg)
+            self.error.emit(msg)
+            return False
+
+        # If the socket was used before, make sure it's in a clean state
+        if self._socket.state() != QtNetwork.QAbstractSocket.UnconnectedState:
+            self._socket.abort()
+
+        print(f"Binding client socket to {local_addr.toString()} on {self._iface_name}")
+        if not self._socket.bind(local_addr, 0):  # port 0 = ephemeral port
+            msg = f"bind() failed: {self._socket.errorString()}"
+            print(msg)
+            self.error.emit(msg)
+            return False
+
+        # Now connect to the remote host
+        self._socket.connectToHost(QtNetwork.QHostAddress("192.168.1.1"), 288)
+        return True
+
+    # --- internals --------------------------------------------------------
+
+    def _get_iface_ipv4(self) -> QtNetwork.QHostAddress | None:
+        """
+        Look up the interface by name and return its first non-loopback IPv4 address.
+        """
+        iface = QtNetwork.QNetworkInterface.interfaceFromName(self._iface_name)
+        if not iface.isValid():
+            print(f"Interface {self._iface_name} not found or not valid")
+            return None
+
+        for entry in iface.addressEntries():
+            ip = entry.ip()
+            if ip.protocol() == QtNetwork.QAbstractSocket.IPv4Protocol and not ip.isLoopback():
+                return ip
+
+        return None
 
     @Slot(QtNetwork.QAbstractSocket.SocketState)
     def on_stateChanged(self, state):
@@ -217,6 +342,12 @@ class ClientManager(QObject):
         lines = raw.strip().splitlines()
         for line in lines:
             self.new_message.emit(line.strip())
+
+    @Slot(QtNetwork.QAbstractSocket.SocketError)
+    def on_error(self, err):
+        msg = f"Socket error ({err}): {self._socket.errorString()}"
+        print(msg)
+        self.error.emit(msg)
 
 
 class MainWindow(QMainWindow):
@@ -279,12 +410,14 @@ class MainWindow(QMainWindow):
         self.btn_clear.setEnabled(False)
         self.input_line.setEnabled(False)
 
-        # self.setup = SetupDialog()
-
         self.resize(900, 600)
         self.show()
 
-        # self.setup.open()
+        setup = SetupDialog()
+        if setup.exec() == QDialog.Accepted:
+            setup.calculate_distance()
+        else:
+            sys.exit(0)
 
     def handle_input(self, text):
         if not self.busy:
@@ -355,13 +488,16 @@ class MainWindow(QMainWindow):
         self.input_line.setEnabled(True)
 
         if self.setup_state == 0:
-            self.client.sendMessage(0b10011111)
+            self.client.sendMessage(0b10000000)
             self.setup_state = 1
         elif self.setup_state == 1:
             self.client.sendMessage(0b10100000)
             self.setup_state = 2
         elif self.setup_state == 2:
             self.client.sendMessage(0b10111000)
+            self.setup_state = 3
+        elif self.setup_state == 3:
+            self.client.sendMessage(0b11000010)
             self.setup_state = -1
 
 
