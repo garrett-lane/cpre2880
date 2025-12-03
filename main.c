@@ -1,4 +1,5 @@
 #include "adc.h"
+#include "balloon.h"
 #include "button.h"
 #include "calibration.h"
 #include "cyBot_Scan.h"
@@ -111,12 +112,23 @@ void main()
     uart_init(115200);
     uart_interrupt_init();
     adc_init();
+    balloon_init();
 
     set_servo_calibation(CALIBRATION_0_DEG, CALIBRATION_180_DEG);
 
     lcd_clear();
 
-    lcd_puts("V0.8");
+    lcd_printf("balloon: %d", read_balloon());
+    timer_waitMillis(1000);
+    while (!balloon_flag) {
+        move_forward(data, 100, 50);
+    }
+    // Hedwig's Theme
+    unsigned char noteCount = 14;
+    unsigned char notes[14] = {81, 74, 77, 76, 74, 81, 79, 76, 74, 77, 76, 73, 75, 69};
+    unsigned char durations[14] = {32, 48, 16, 32, 64, 32, 96, 96, 48, 16, 32, 64, 32, 96 };
+    oi_loadSong(0, noteCount, notes, durations);
+    oi_play_song(0);
 
 #if MANUAL
     run_manual(data, &scan_data);
