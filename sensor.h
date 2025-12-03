@@ -15,6 +15,8 @@ typedef struct detect_object {
     float center_angle;
     float distance;
     int linear_width;
+    int start;
+    int end;
 } Object_t;
 
 cyBOT_Scan_t scan_sensor_data_array[91];
