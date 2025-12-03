@@ -33,5 +33,9 @@ void balloon_handler() {
     balloon_flag = 1;
     lcd_printf("Balloon Status: %d", read_balloon());
 
-
+    unsigned char noteCount = 14;
+    unsigned char notes[14] = {81, 74, 77, 76, 74, 81, 79, 76, 74, 77, 76, 73, 75, 69};
+    unsigned char durations[14] = {32, 48, 16, 32, 64, 32, 96, 96, 48, 16, 32, 64, 32, 96 };
+    oi_loadSong(0, noteCount, notes, durations);
+    oi_play_song(0);
 }

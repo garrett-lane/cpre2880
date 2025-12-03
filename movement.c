@@ -20,16 +20,16 @@ int move(oi_t *sensor, double distance_mm, int speed_mm, int forward) {
         oi_update(sensor);
         dist += sensor->distance; // Add the new distance travel since last read
         if (forward & (distance_mm - dist < dist * 0.1)) {
-            lcd_puts("FORWARD");
+            // lcd_puts("FORWARD");
             oi_setWheels(15, 15);
             speed = 15;
         } else if (!forward & (distance_mm - dist > dist * 0.1)) {
-            lcd_puts("BACKWARD");
+            // lcd_puts("BACKWARD");
             oi_setWheels(-15, -15);
             speed = -15;
         }
-        lcd_clear();
-        lcd_printf("%.1f / %.1f at speed: %d", dist, distance_mm, speed);
+        // lcd_clear();
+        // lcd_printf("%.1f / %.1f at speed: %d", dist, distance_mm, speed);
         if (forward && (sensor->bumpLeft || sensor->bumpRight)) {
             break;
         }
@@ -47,7 +47,7 @@ int move(oi_t *sensor, double distance_mm, int speed_mm, int forward) {
     pos_y += sin(pos_angle * (PI / 180.0)) * dist;
     putty_send_pos();
 
-    lcd_printf("%.1f, %.3f%% error", dist, ((dist-distance_mm)/distance_mm)*100);
+    // lcd_printf("%.1f, %.3f%% error", dist, ((dist-distance_mm)/distance_mm)*100);
     if (forward) {
         return dist; // returns MILLIMETERS
     } else {

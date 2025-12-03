@@ -29,22 +29,24 @@ void servo_init(void) {
     TIMER1_TBMR_R |= 0xA; // periodic, pwm en, edge count
     TIMER1_TBPR_R = 0x4;
     TIMER1_TBILR_R = 0xE200;
+    TIMER1_TBMATCHR_R &= 0x0;
+    TIMER1_TBPMR_R &= 0x0;
+    TIMER1_CTL_R |= 0x100;
 
     current_degrees = 0;
 }
 
 void servo_move(float degrees) {
-    TIMER1_CTL_R &= ~0x100;
 
     float pulse = m * (degrees / 180) + (b / 180.0) + 1; // linear relationship is y = x+1
     int cycles = (320000 - ((pulse / 20) * 320000));
 
     TIMER1_TBMATCHR_R = cycles & 0xFFFF;
     TIMER1_TBPMR_R = (cycles >> 16) & 0xFF;
-    TIMER1_CTL_R |= 0x100;
 
     current_degrees = degrees;
-    timer_waitMillis(200);
+    timer_waitMillis(21);
+
 }
 
 void set_servo_calibation(float value_z, float value_one_eighty) {

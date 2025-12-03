@@ -1,4 +1,5 @@
 #include "adc.h"
+#include "auto.h"
 #include "balloon.h"
 #include "button.h"
 #include "calibration.h"
@@ -21,7 +22,6 @@
 // Dont worry sean, I alphabatized our includes! You're Welcome!
 
 volatile char uart_data;  // Your UART interrupt code can place read data here
-#define PI 3.14159
 
 typedef enum movements_e {
     FORWARD,
@@ -117,23 +117,12 @@ void main()
     set_servo_calibation(CALIBRATION_0_DEG, CALIBRATION_180_DEG);
 
     lcd_clear();
-
-    lcd_printf("balloon: %d", read_balloon());
-    timer_waitMillis(1000);
-    while (!balloon_flag) {
-        move_forward(data, 100, 50);
-    }
-    // Hedwig's Theme
-    unsigned char noteCount = 14;
-    unsigned char notes[14] = {81, 74, 77, 76, 74, 81, 79, 76, 74, 77, 76, 73, 75, 69};
-    unsigned char durations[14] = {32, 48, 16, 32, 64, 32, 96, 96, 48, 16, 32, 64, 32, 96 };
-    oi_loadSong(0, noteCount, notes, durations);
-    oi_play_song(0);
+    lcd_printf("V1");
 
 #if MANUAL
     run_manual(data, &scan_data);
 #elif AUTO
-    // PUT AUTO CODE HERE
+    run_auto(data, &scan_data);
 #endif
 
     //required end statement
