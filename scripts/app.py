@@ -2,10 +2,10 @@ import os
 import sys
 
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QTextEdit, QSplitter, QDialog, QComboBox, QSpinBox, QLabel, QDialogButtonBox
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QTextEdit, QSplitter, QDialog, QComboBox, QSpinBox, QLabel, QDialogButtonBox, QTabWidget
 )
 from PySide6.QtCore import QTimer, QObject, Signal, Slot
-from PySide6 import QtCore, QtNetwork, Qt
+from PySide6 import QtCore, QtNetwork
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -101,8 +101,10 @@ class MplCanvas(FigureCanvas):
     prev = []
     num_plots = 1
     in_scan = False
-    bot_angle = np.radians(90)
-    bot_pos = (0, 0)
+    manual_bot_angle = np.radians(90)
+    manual_bot_pos = (0, 0)
+    auto_bot_angle = np.radians(90)
+    auto_bot_pos = (0.5, 0)
 
     def __init__(self, parent=None, width=10, height=8, dpi=100):
         fig = Figure(figsize=(width, height), dpi=dpi)
@@ -115,9 +117,13 @@ class MplCanvas(FigureCanvas):
         self.create_polar_graph(self.object_ax, "Objects (Not to scale)")
         self.create_bot_graph(self.bot_ax, "Area")
 
-        self.bot = plt.Circle(self.bot_pos, 0.33 / 2, color='black', fill=None, linewidth=2)
-        self.bot_line, = self.bot_ax.plot([0, 0], [0, 0.33 / 2], color='black', linewidth=2.0)
-        self.bot_ax.add_patch(self.bot)
+        self.manual_bot = plt.Circle(self.manual_bot_pos, 0.33 / 2, color='black', fill=None, linewidth=2)
+        self.manual_bot_line, = self.bot_ax.plot([0, 0], [0, 0.33 / 2], color='black', linewidth=2.0)
+        self.bot_ax.add_patch(self.manual_bot)
+
+        self.auto_bot = plt.Circle(self.auto_bot_pos, 0.33 / 2, color='red', fill=None, linewidth=2)
+        self.auto_bot_line, = self.bot_ax.plot([0.5, 0.5], [0, 0.33 / 2], color='red', linewidth=2.0)
+        self.bot_ax.add_patch(self.auto_bot)
 
         super().__init__(fig)
 
@@ -225,49 +231,71 @@ class MplCanvas(FigureCanvas):
             self.object_ax.clear()
             self.create_polar_graph(self.object_ax, "Objects (Not to scale)")
 
-    def update_bot_plt(self, line):
+    def update_bot_plt(self, line, name):
         if line.startswith("POS"):
             data = line.split()
-            self.bot_pos = (int(data[1]) / 1000, int(data[2]) / 1000)
-            self.bot_angle = np.radians(int(data[3]))
+            if name == "Manual":
+                self.manual_bot_pos = (int(data[1]) / 1000, int(data[2]) / 1000)
+                self.manual_bot_angle = np.radians(int(data[3]))
+                self.draw_manual_bot()
+            elif name == "Auto":
+                self.auto_bot_pos = (int(data[1]) / 1000, int(data[2]) / 1000)
+                self.auto_bot_angle = np.radians(int(data[3]))
+                self.draw_auto_bot()
 
-            self.draw_bot()
         elif line.startswith("OBJECT"):
             data = line.split()
             angle = np.radians(float(data[1].strip()))
             distance = float(data[2].strip()) / 100
             width = int(data[3].strip()) / 200
 
-            x, y = self.bot_pos
-
-            x += (0.166 * np.cos(self.bot_angle)) + (distance * np.cos(self.bot_angle + angle - np.radians(90))) + (width / 2)
-            y += (0.166 * np.sin(self.bot_angle)) + (distance * np.sin(self.bot_angle + angle - np.radians(90))) + (width / 2)
+            x, y = (0, 0)
+            if name == "Manual":
+                x, y = self.manual_bot_pos
+                x += (0.166 * np.cos(self.manual_bot_angle)) + (distance * np.cos(self.manual_bot_angle + angle - np.radians(90))) + (width / 2)
+                y += (0.166 * np.sin(self.manual_bot_angle)) + (distance * np.sin(self.manual_bot_angle + angle - np.radians(90))) + (width / 2)
+            elif name == "Auto":
+                x, y = self.auto_bot_pos
+                x += (0.166 * np.cos(self.auto_bot_angle)) + (distance * np.cos(self.auto_bot_angle + angle - np.radians(90))) + (width / 2)
+                y += (0.166 * np.sin(self.auto_bot_angle)) + (distance * np.sin(self.auto_bot_angle + angle - np.radians(90))) + (width / 2)
 
             circle = plt.Circle((x, y), width, color='green', fill=None, linewidth=1)
             self.bot_ax.add_patch(circle)
 
             self.draw()
 
-    def draw_bot(self):
-        if self.bot:
-            self.bot.remove()
-            self.bot_line.remove()
-        self.bot = plt.Circle(self.bot_pos, 0.33 / 2, fill=None, linewidth=2)
+    def draw_manual_bot(self):
+        if self.manual_bot:
+            self.manual_bot.remove()
+            self.manual_bot_line.remove()
+        self.manual_bot = plt.Circle(self.manual_bot_pos, 0.33 / 2, fill=None, linewidth=2, color='black')
 
-        self.bot_line, = self.bot_ax.plot([self.bot_pos[0], self.bot_pos[0] + ((0.33 / 2) * np.cos(self.bot_angle))], [self.bot_pos[1], self.bot_pos[1] + ((0.33 / 2) * np.sin(self.bot_angle))], color='black', linewidth=2.0)
-        self.bot_ax.add_patch(self.bot)
+        self.manual_bot_line, = self.bot_ax.plot([self.manual_bot_pos[0], self.manual_bot_pos[0] + ((0.33 / 2) * np.cos(self.manual_bot_angle))], [self.manual_bot_pos[1], self.manual_bot_pos[1] + ((0.33 / 2) * np.sin(self.manual_bot_angle))], color='black', linewidth=2.0)
+        self.bot_ax.add_patch(self.manual_bot)
+
+        self.draw()
+
+    def draw_auto_bot(self):
+        if self.auto_bot:
+            self.auto_bot.remove()
+            self.auto_bot_line.remove()
+        self.auto_bot = plt.Circle(self.auto_bot_pos, 0.33 / 2, fill=None, linewidth=2, color='red')
+
+        self.auto_bot_line, = self.bot_ax.plot([self.auto_bot_pos[0], self.auto_bot_pos[0] + ((0.33 / 2) * np.cos(self.auto_bot_angle))], [self.auto_bot_pos[1], self.auto_bot_pos[1] + ((0.33 / 2) * np.sin(self.auto_bot_angle))], color='red', linewidth=2.0)
+        self.bot_ax.add_patch(self.auto_bot)
 
         self.draw()
 
 
 class ClientManager(QObject):
     connected = Signal()
-    new_message = Signal(str)
+    new_message = Signal(str, str, QObject)
     error = Signal(str)
 
-    def __init__(self, iface_name: str = "wlp193s0f3u1", parent=None):
-        super(ClientManager, self).__init__(parent)
+    def __init__(self, iface_name, name):
+        super(ClientManager, self).__init__()
 
+        self.name = name
         self._iface_name = iface_name
         self._socket = QtNetwork.QTcpSocket(self)
 
@@ -275,13 +303,7 @@ class ClientManager(QObject):
         self._socket.readyRead.connect(self.on_readyRead)
         self._socket.errorOccurred.connect(self.on_error)
 
-    # --- public API -------------------------------------------------------
-
     def launch(self) -> bool:
-        """
-        Bind to the IPv4 address of self._iface_name, then connect to 192.168.1.1:288.
-        Returns True if the connect was initiated, False if something failed early.
-        """
         local_addr = self._get_iface_ipv4()
         if local_addr is None:
             msg = f"No valid IPv4 address found on interface {self._iface_name}"
@@ -300,16 +322,10 @@ class ClientManager(QObject):
             self.error.emit(msg)
             return False
 
-        # Now connect to the remote host
         self._socket.connectToHost(QtNetwork.QHostAddress("192.168.1.1"), 288)
         return True
 
-    # --- internals --------------------------------------------------------
-
     def _get_iface_ipv4(self) -> QtNetwork.QHostAddress | None:
-        """
-        Look up the interface by name and return its first non-loopback IPv4 address.
-        """
         iface = QtNetwork.QNetworkInterface.interfaceFromName(self._iface_name)
         if not iface.isValid():
             print(f"Interface {self._iface_name} not found or not valid")
@@ -325,15 +341,15 @@ class ClientManager(QObject):
     @Slot(QtNetwork.QAbstractSocket.SocketState)
     def on_stateChanged(self, state):
         if state == QtNetwork.QAbstractSocket.ConnectedState:
-            print("connected")
+            print(f"[{self.name}]: connected")
             self.connected.emit()
         elif state == QtNetwork.QAbstractSocket.UnconnectedState:
-            print("disconnected")
+            print(f"[{self.name}]: disconnected")
 
     def sendMessage(self, msg):
-        print("sending")
+        print(f"[{self.name}]: sending")
         if self._socket.state() == QtNetwork.QAbstractSocket.ConnectedState:
-            print("sent")
+            print(f"[{self.name}]: sent")
             self._socket.write(msg.to_bytes(1))
 
     @Slot()
@@ -341,7 +357,7 @@ class ClientManager(QObject):
         raw = self._socket.readAll().data().decode("utf-8")
         lines = raw.strip().splitlines()
         for line in lines:
-            self.new_message.emit(line.strip())
+            self.new_message.emit(line.strip(), self.name, self)
 
     @Slot(QtNetwork.QAbstractSocket.SocketError)
     def on_error(self, err):
@@ -351,8 +367,9 @@ class ClientManager(QObject):
 
 
 class MainWindow(QMainWindow):
-    busy = False
-    setup_state = 0
+    busy = True
+    setup_manual_state = 0
+    setup_auto_state = 0
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -372,13 +389,21 @@ class MainWindow(QMainWindow):
         self.input_line = QLineEdit()
         self.btn_exit = QPushButton("Exit")
 
-        self.log_box = QTextEdit()
-        self.log_box.setReadOnly(True)
-        self.log_box.setMinimumHeight(200)
+        self.log_manual_box = QTextEdit()
+        self.log_manual_box.setReadOnly(True)
+        self.log_manual_box.setMinimumHeight(200)
+
+        self.log_auto_box = QTextEdit()
+        self.log_auto_box.setReadOnly(True)
+        self.log_auto_box.setMinimumHeight(200)
+
+        self.log_tab = QTabWidget()
+        self.log_tab.addTab(self.log_manual_box, "Manual")
+        self.log_tab.addTab(self.log_auto_box, "Auto")
 
         button_layout.addWidget(self.btn_scan)
         button_layout.addWidget(self.btn_clear)
-        button_layout.addWidget(self.log_box)
+        button_layout.addWidget(self.log_tab)
         button_layout.addWidget(self.input_line)
         button_layout.addWidget(self.btn_exit)
 
@@ -391,8 +416,10 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 2)
 
-        self.client = ClientManager()
-        self.client.launch()
+        self.manual_client = ClientManager("wlp1s0", "Manual")
+        self.manual_client.launch()
+        self.auto_client = ClientManager("wlp193s0f3u1", "Auto")
+        self.auto_client.launch()
 
         self.timer = QTimer()
         self.timer.setInterval(100)
@@ -402,9 +429,12 @@ class MainWindow(QMainWindow):
         self.btn_scan.clicked.connect(self.scan_message)
         self.btn_clear.clicked.connect(self.clear_plot)
         self.btn_exit.clicked.connect(QApplication.quit)
-        self.client.new_message.connect(self.parse_message)
-        self.client.connected.connect(self.connect_cybot)
+        self.manual_client.new_message.connect(self.parse_message)
+        self.auto_client.new_message.connect(self.parse_message)
         self.input_line.textChanged.connect(self.handle_input)
+
+        self.manual_client.connected.connect(self.connect_manual_cybot)
+        self.auto_client.connected.connect(self.connect_auto_cybot)
 
         self.btn_scan.setEnabled(False)
         self.btn_clear.setEnabled(False)
@@ -427,13 +457,13 @@ class MainWindow(QMainWindow):
             self.input_line.setText(c)
             match c:
                 case 'w':
-                    self.client.sendMessage(0b00000000)
+                    self.manual_client.sendMessage(0b00000000)
                 case 's':
-                    self.client.sendMessage(0b00010000)
+                    self.manual_client.sendMessage(0b00010000)
                 case 'a':
-                    self.client.sendMessage(0b00100000)
+                    self.manual_client.sendMessage(0b00100000)
                 case 'd':
-                    self.client.sendMessage(0b00110000)
+                    self.manual_client.sendMessage(0b00110000)
                 case 'm':
                     self.scan_message()
                 case _:
@@ -453,52 +483,73 @@ class MainWindow(QMainWindow):
 
     def scan_message(self):
         self.busy = True
-        self.client.sendMessage(0b01111000)
+        self.manual_client.sendMessage(0b01111000)
 
     def clear_plot(self):
         self.busy = True
-        self.client.sendMessage(0b11000001)
+        self.manual_client.sendMessage(0b11000001)
 
-    def parse_message(self, msg):
-        print(msg)
-        self.log_box.append(msg)
+    def parse_message(self, msg, name, client):
+        print(f"[{name}]: {msg}")
+        if name == "Manual":
+            self.log_manual_box.append(msg)
+        elif name == "Auto":
+            self.log_auto_box.append(msg)
 
-        if msg.startswith("ACK"):
-            self.busy = False
-            if self.setup_state >= 0:
-                self.connect_cybot()
-        elif msg.startswith("CLEAR"):
-            self.busy = True
-            self.canvas.update_scan_plot(msg)
-            self.canvas.update_object_plot(msg)
-        elif self.canvas.in_scan or msg.startswith("STARTSCAN") or msg.startswith("ENDSCAN"):
-            self.busy = True
-            self.canvas.update_scan_plot(msg)
-        elif msg.startswith("OBJECT"):
-            self.busy = True
-            self.canvas.update_object_plot(msg)
-            self.canvas.update_bot_plt(msg)
-        elif msg.startswith("POS"):
-            self.busy = True
-            self.canvas.update_bot_plt(msg)
+        if name == "Manual":
+            if msg.startswith("ACK"):
+                self.busy = False
+                if self.setup_manual_state >= 0:
+                    self.connect_manual_cybot()
+            elif msg.startswith("CLEAR"):
+                self.busy = True
+                self.canvas.update_scan_plot(msg)
+                self.canvas.update_object_plot(msg)
+            elif self.canvas.in_scan or msg.startswith("STARTSCAN") or msg.startswith("ENDSCAN"):
+                self.busy = True
+                self.canvas.update_scan_plot(msg)
+            elif msg.startswith("OBJECT"):
+                self.busy = True
+                self.canvas.update_object_plot(msg)
+                self.canvas.update_bot_plt(msg, name)
+            elif msg.startswith("POS"):
+                self.busy = True
+                self.canvas.update_bot_plt(msg, name)
+        elif name == "Auto":
+            if msg.startswith("ACK"):
+                if self.setup_auto_state >= 0:
+                    self.connect_auto_cybot()
+            elif msg.startswith("OBJECT"):
+                self.canvas.update_bot_plt(msg, name)
+            elif msg.startswith("POS"):
+                self.canvas.update_bot_plt(msg, name)
 
-    def connect_cybot(self):
-        self.btn_scan.setEnabled(True)
-        self.btn_clear.setEnabled(True)
-        self.input_line.setEnabled(True)
+    def connect_manual_cybot(self):
+        if self.setup_manual_state == 0:
+            self.manual_client.sendMessage(0b10000000)
+            self.setup_manual_state = 1
+        elif self.setup_manual_state == 1:
+            self.manual_client.sendMessage(0b10100000)
+            self.setup_manual_state = 2
+        elif self.setup_manual_state == 2:
+            self.manual_client.sendMessage(0b10111000)
+            self.setup_manual_state = 3
+        elif self.setup_manual_state == 3:
+            self.manual_client.sendMessage(0b11000010)
+            self.setup_manual_state = -1
+            self.input_line.setEnabled(True)
 
-        if self.setup_state == 0:
-            self.client.sendMessage(0b10000000)
-            self.setup_state = 1
-        elif self.setup_state == 1:
-            self.client.sendMessage(0b10100000)
-            self.setup_state = 2
-        elif self.setup_state == 2:
-            self.client.sendMessage(0b10111000)
-            self.setup_state = 3
-        elif self.setup_state == 3:
-            self.client.sendMessage(0b11000010)
-            self.setup_state = -1
+    def connect_auto_cybot(self):
+        print("[Auto]: setup")
+        if self.setup_auto_state == 0:
+            self.auto_client.sendMessage(0b10001100)
+            self.setup_auto_state = 1
+        elif self.setup_auto_state == 1:
+            self.auto_client.sendMessage(0b10100100)
+            self.setup_auto_state = 2
+        elif self.setup_auto_state == 2:
+            self.auto_client.sendMessage(0b11000010)
+            self.setup_auto_state = -1
 
 
 if __name__ == "__main__":
