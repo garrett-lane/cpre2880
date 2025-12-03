@@ -94,27 +94,16 @@ class SetupDialog(QDialog):
         print(f"{distance} - {val} + {extra} - {bytes(val)} + {bytes(extra)}")
 
 
-class MplCanvas(FigureCanvas):
-    distance = None
-    angle_degrees = None
-    index = 0
-    prev = []
-    num_plots = 1
-    in_scan = False
+class FieldCanvas(FigureCanvas):
     manual_bot_angle = np.radians(90)
     manual_bot_pos = (0, 0)
     auto_bot_angle = np.radians(90)
     auto_bot_pos = (0.5, 0)
 
-    def __init__(self, parent=None, width=10, height=8, dpi=100):
+    def __init__(self, parent=None, width=10, height=8, dpi=75):
         fig = Figure(figsize=(width, height), dpi=dpi)
 
-        self.scan_ax = fig.add_subplot(221, polar=True)
-        self.object_ax = fig.add_subplot(222, polar=True)
-        self.bot_ax = fig.add_subplot(223)
-
-        self.create_polar_graph(self.scan_ax, "CyBot Sensor Scan")
-        self.create_polar_graph(self.object_ax, "Objects (Not to scale)")
+        self.bot_ax = fig.add_subplot()
         self.create_bot_graph(self.bot_ax, "Area")
 
         self.manual_bot = plt.Circle(self.manual_bot_pos, 0.33 / 2, color='black', fill=None, linewidth=2)
@@ -127,109 +116,10 @@ class MplCanvas(FigureCanvas):
 
         super().__init__(fig)
 
-    def resizeEvent(self, event):
-        w = event.size().width()
-        h = event.size().height()
-        side = min(w, h)
-
-        # Resize the figure itself to be square inside the widget
-        dpi = self.figure.get_dpi()
-        self.figure.set_size_inches(side / dpi, side / dpi, forward=True)
-
-        super().resizeEvent(event)
-
-    def create_polar_graph(self, ax, title):
-        # Create a polar plot
-        ax.set_xlabel('Distance (m)', fontsize=12.0)  # Label x axis
-        ax.set_ylabel('Angle (degrees)', fontsize=12.0)  # Label y axis
-        ax.xaxis.set_label_coords(0.5, 0.15)  # Modify location of x axis label (Typically do not need or want this)
-        ax.tick_params(axis='both', which='major', labelsize=14)  # set font size of tick labels
-        ax.set_rlim(0.0, 2.5)
-        ax.set_rticks([0.5, 1, 1.5, 2, 2.5])  # Set plot "distance" tick marks at .5, 1, 1.5, 2, and 2.5 meters
-        ax.set_rlabel_position(-22.5)  # Adjust location of the radial labels
-        ax.set_thetamax(180)  # Saturate angle to 180 degrees
-        ax.set_xticks(np.arange(0, np.pi + .1, np.pi / 4))  # Set plot "angle" tick marks to pi/4 radians (i.e., displayed at 45 degree) increments
-        ax.grid(True)  # Show grid lines
-        ax.set_title(title, size=12, y=1.0, pad=-24)
-
     def create_bot_graph(self, ax, title):
-        ax.set_xlim(-2.135, 2.135)
-        ax.set_ylim(-1.22, 1.22)
+        ax.set_xlim(-8.54, 8.54)
+        ax.set_ylim(-8.54, 8.54)
         ax.set_title(title, size=12, y=1.0)
-
-    def update_scan_plot(self, line):
-        if line.startswith("STARTSCAN"):
-            count = 91
-            if len(line.split()) > 1:
-                count = int(line.split()[1])
-                if len(line.split()) > 2:
-                    self.num_plots = int(line.split()[2])
-
-            print(f"Beginning to plot {self.num_plots} scan(s). {count} entries")
-            self.distance = [np.empty(int(count), dtype=float) for _ in range(self.num_plots)]
-            self.angle_degrees = np.empty(int(count), dtype=float)  # Initally empty
-            self.index = 0
-            self.in_scan = True
-
-            self.scan_ax.clear()
-            self.create_polar_graph(self.scan_ax, "CyBot Sensor Scan")
-            self.prev = []
-        elif line.startswith("ENDSCAN"):
-            print("Drawing final scan")
-            if self.prev:
-                for p in self.prev:
-                    p.remove()
-                self.prev.clear()
-
-            for i in range(self.num_plots):
-                self.scan_ax.plot(np.radians(self.angle_degrees), self.distance[i], linewidth=2.0)
-                print("plotting")
-
-            self.in_scan = False
-            self.draw()
-        elif self.in_scan and (self.distance is not None and self.angle_degrees is not None):
-            data = line.split()    # Split line into columns (by default delineates columns by whitespace)
-            if len(data) > 1:
-                angle = float(data[0].strip())  # Column 0 holds the angle at which distance was measured
-                if self.index > 0:
-                    if angle != self.angle_degrees[self.index - 1]:
-                        self.angle_degrees[self.index] = angle
-                    else:
-                        print("Correcting previous angle")
-                        self.index -= 1
-                else:
-                    self.angle_degrees[self.index] = angle
-
-                for i in range(self.num_plots):
-                    self.distance[i][self.index] = float(data[i + 1].strip()) / 100
-
-                for p in self.prev:
-                    p.remove()
-                self.prev.clear()
-
-                for i in range(self.num_plots):
-                    p, = self.scan_ax.plot(np.radians(self.angle_degrees[:self.index]), self.distance[i][:self.index], color="grey", linewidth=2.0)
-                    self.prev.append(p)
-                self.draw()
-                self.index += 1
-        elif line.startswith("CLEAR"):
-            print("Clearing plots")
-            self.scan_ax.clear()
-            self.create_polar_graph(self.scan_ax, "CyBot Sensor Scan")
-            self.prev = []
-
-    def update_object_plot(self, line):
-        if line.startswith("OBJECT"):
-            print("Drawing object")
-            data = line.split()
-            angle = float(data[1].strip())
-            distance = float(data[2].strip()) / 100
-            width = int(data[3].strip()) / 2
-            self.object_ax.plot(np.radians(angle), distance, 'o', markersize=width, markerfacecolor='none')
-            self.draw()
-        elif line.startswith("CLEAR"):
-            self.object_ax.clear()
-            self.create_polar_graph(self.object_ax, "Objects (Not to scale)")
 
     def update_bot_plt(self, line, name):
         if line.startswith("POS"):
@@ -283,6 +173,187 @@ class MplCanvas(FigureCanvas):
 
         self.auto_bot_line, = self.bot_ax.plot([self.auto_bot_pos[0], self.auto_bot_pos[0] + ((0.33 / 2) * np.cos(self.auto_bot_angle))], [self.auto_bot_pos[1], self.auto_bot_pos[1] + ((0.33 / 2) * np.sin(self.auto_bot_angle))], color='red', linewidth=2.0)
         self.bot_ax.add_patch(self.auto_bot)
+
+        self.draw()
+
+
+class MplCanvas(FigureCanvas):
+    manual_distance = None
+    manual_angle_degrees = None
+    manual_index = 0
+    manual_prev = []
+    manual_num_plots = 1
+    manual_in_scan = False
+
+    auto_distance = None
+    auto_angle_degrees = None
+    auto_index = 0
+    auto_num_plots = 1
+    auto_in_scan = False
+
+    def __init__(self, parent=None, width=10, height=8, dpi=100):
+        fig = Figure(figsize=(width, height), dpi=dpi)
+
+        self.manual_scan_ax = fig.add_subplot(221, polar=True)
+        self.manual_object_ax = fig.add_subplot(222, polar=True)
+        self.auto_scan_ax = fig.add_subplot(223, polar=True)
+        self.auto_object_ax = fig.add_subplot(224, polar=True)
+
+        self.create_polar_graph(self.manual_scan_ax, "Manual Sensor Scan")
+        self.create_polar_graph(self.manual_object_ax, "Manual Objects (Not to scale)")
+        self.create_polar_graph(self.auto_scan_ax, "Auto Sensor Scan")
+        self.create_polar_graph(self.auto_object_ax, "Auto Objects (Not to scale)")
+
+        super().__init__(fig)
+
+    def resizeEvent(self, event):
+        w = event.size().width()
+        h = event.size().height()
+        side = min(w, h)
+
+        # Resize the figure itself to be square inside the widget
+        dpi = self.figure.get_dpi()
+        self.figure.set_size_inches(side / dpi, side / dpi, forward=True)
+
+        super().resizeEvent(event)
+
+    def create_polar_graph(self, ax, title):
+        # Create a polar plot
+        ax.set_xlabel('Distance (m)', fontsize=12.0)  # Label x axis
+        ax.set_ylabel('Angle (degrees)', fontsize=12.0)  # Label y axis
+        ax.xaxis.set_label_coords(0.5, 0.15)  # Modify location of x axis label (Typically do not need or want this)
+        ax.tick_params(axis='both', which='major', labelsize=14)  # set font size of tick labels
+        ax.set_rlim(0.0, 1.1)
+        ax.set_rticks([0.25, 0.5, 0.75, 1.0])  # Set plot "distance" tick marks at .5, 1, 1.5, 2, and 2.5 meters
+        ax.set_rlabel_position(-22.5)  # Adjust location of the radial labels
+        ax.set_thetamax(180)  # Saturate angle to 180 degrees
+        ax.set_xticks(np.arange(0, np.pi + .1, np.pi / 4))  # Set plot "angle" tick marks to pi/4 radians (i.e., displayed at 45 degree) increments
+        ax.grid(True)  # Show grid lines
+        ax.set_title(title, size=12, y=1.0, pad=-24)
+
+    def update_scan_plot(self, line, name):
+        if line.startswith("STARTSCAN"):
+            self._update_start_scan(line, name)
+        elif line.startswith("ENDSCAN"):
+            self._update_end_scan(line, name)
+        elif self.manual_in_scan and (self.manual_distance is not None and self.manual_angle_degrees is not None):
+            self._update_in_scan(line, name)
+        elif line.startswith("CLEAR"):
+            print("Clearing plots")
+            if name == "Manual":
+                self.manual_scan_ax.clear()
+                self.create_polar_graph(self.manual_scan_ax, "Manual Sensor Scan")
+                self.manual_prev = []
+            elif name == "Auto":
+                self.auto_scan_ax.clear()
+                self.create_polar_graph(self.auto_scan_ax, "Auto Sensor Scan")
+
+    def update_object_plot(self, line, name):
+        if line.startswith("OBJECT"):
+            print("Drawing object")
+            data = line.split()
+            angle = float(data[1].strip())
+            distance = float(data[2].strip()) / 100
+            width = int(data[3].strip()) / 2
+            if name == "Manual":
+                self.manual_object_ax.plot(np.radians(angle), distance, 'o', markersize=width, markerfacecolor='none')
+            elif name == "Auto":
+                self.auto_object_ax.plot(np.radians(angle), distance, 'o', markersize=width, markerfacecolor='none')
+
+            self.draw()
+        elif line.startswith("CLEAR"):
+            if name == "Manual":
+                self.manual_object_ax.clear()
+                self.create_polar_graph(self.manual_object_ax, "Manual Objects (Not to scale)")
+            elif name == "Auto":
+                self.auto_object_ax.clear()
+                self.create_polar_graph(self.auto_object_ax, "Auto Objects (Not to scale)")
+
+    def _update_start_scan(self, line, name):
+        count = 91
+        if len(line.split()) > 1:
+            count = int(line.split()[1])
+            if len(line.split()) > 2:
+                if name == "Manual":
+                    self.manual_num_plots = int(line.split()[2])
+                elif name == "Auto":
+                    self.auto_num_plots = int(line.split()[2])
+
+        if name == "Manual":
+            print(f"Beginning to plot {self.manual_num_plots} scan(s). {count} entries")
+            self.manual_distance = [np.empty(int(count), dtype=float) for _ in range(self.manual_num_plots)]
+            self.manual_angle_degrees = np.empty(int(count), dtype=float)  # Initally empty
+            self.manual_index = 0
+            self.manual_in_scan = True
+
+            self.manual_scan_ax.clear()
+            self.create_polar_graph(self.manual_scan_ax, "Manual Sensor Scan")
+            self.manual_prev = []
+        elif name == "Auto":
+            print(f"Beginning to plot {self.auto_num_plots} scan(s). {count} entries")
+            self.auto_distance = [np.empty(int(count), dtype=float) for _ in range(self.auto_num_plots)]
+            self.auto_angle_degrees = np.empty(int(count), dtype=float)  # Initally empty
+            self.auto_index = 0
+            self.auto_in_scan = True
+
+    def _update_end_scan(self, line, name):
+        print("Drawing final scan")
+        if name == "Manual":
+            self.manual_in_scan = False
+        elif name == "Auto":
+            self.auto_scan_ax.clear()
+            self.create_polar_graph(self.auto_scan_ax, "Auto Sensor Scan")
+            self.auto_in_scan = False
+
+        self._draw_scan(name, line_color=None)
+
+    def _update_in_scan(self, line, name):
+        data = line.split()   # Split line into columns (by default delineates columns by whitespace)
+        if len(data) > 1:
+            angle = float(data[0].strip())  # Column 0 holds the angle at which distance was measured
+
+            if name == "Manual":
+                if self.manual_index > 0:
+                    if angle != self.manual_angle_degrees[self.manual_index - 1]:
+                        self.manual_angle_degrees[self.manual_index] = angle
+                    else:
+                        print("Correcting previous angle")
+                        self.manual_index -= 1
+                else:
+                    self.manual_angle_degrees[self.manual_index] = angle
+
+                for i in range(self.manual_num_plots):
+                    self.manual_distance[i][self.manual_index] = float(data[i + 1].strip()) / 100
+
+                self._draw_scan(name)
+                self.manual_index += 1
+            elif name == "Auto":
+                if self.auto_index > 0:
+                    if angle != self.auto_angle_degrees[self.auto_index - 1]:
+                        self.auto_angle_degrees[self.auto_index] = angle
+                    else:
+                        print("Correcting previous angle")
+                        self.auto_index -= 1
+                else:
+                    self.auto_angle_degrees[self.auto_index] = angle
+
+                for i in range(self.auto_num_plots):
+                    self.auto_distance[i][self.auto_index] = float(data[i + 1].strip()) / 100
+
+                self.auto_index += 1
+
+    def _draw_scan(self, name, line_color='grey'):
+        if name == "Manual":
+            for p in self.manual_prev:
+                p.remove()
+            self.manual_prev.clear()
+
+            for i in range(self.manual_num_plots):
+                p, = self.manual_scan_ax.plot(np.radians(self.manual_angle_degrees[:self.manual_index]), self.manual_distance[i][:self.manual_index], color=line_color, linewidth=2.0)
+                self.manual_prev.append(p)
+        elif name == "Auto":
+            for i in range(self.auto_num_plots):
+                p, = self.auto_scan_ax.plot(np.radians(self.auto_angle_degrees), self.auto_distance[i], color=line_color, linewidth=2.0)
 
         self.draw()
 
@@ -381,7 +452,12 @@ class MainWindow(QMainWindow):
         splitter = QSplitter(QtCore.Qt.Horizontal)
         main_layout.addWidget(splitter)
 
-        self.canvas = MplCanvas(self)
+        self.field_canvas = FieldCanvas(self)
+        self.scan_canvas = MplCanvas(self)
+
+        self.canvas_tab = QTabWidget()
+        self.canvas_tab.addTab(self.field_canvas, "Field")
+        self.canvas_tab.addTab(self.scan_canvas, "Scans")
 
         button_layout = QVBoxLayout()
         self.btn_scan = QPushButton("Scan")
@@ -410,7 +486,7 @@ class MainWindow(QMainWindow):
         right_panel = QWidget()
         right_panel.setLayout(button_layout)
 
-        splitter.addWidget(self.canvas)
+        splitter.addWidget(self.canvas_tab)
         splitter.addWidget(right_panel)
 
         splitter.setStretchFactor(0, 3)
@@ -479,7 +555,7 @@ class MainWindow(QMainWindow):
             self.btn_scan.setEnabled(True)
             self.btn_clear.setEnabled(True)
 
-        self.canvas.draw()
+        self.scan_canvas.draw()
 
     def scan_message(self):
         self.busy = True
@@ -496,33 +572,32 @@ class MainWindow(QMainWindow):
         elif name == "Auto":
             self.log_auto_box.append(msg)
 
-        if name == "Manual":
-            if msg.startswith("ACK"):
+        if msg.startswith("ACK"):
+            if name == "Manual":
                 self.busy = False
                 if self.setup_manual_state >= 0:
                     self.connect_manual_cybot()
-            elif msg.startswith("CLEAR"):
-                self.busy = True
-                self.canvas.update_scan_plot(msg)
-                self.canvas.update_object_plot(msg)
-            elif self.canvas.in_scan or msg.startswith("STARTSCAN") or msg.startswith("ENDSCAN"):
-                self.busy = True
-                self.canvas.update_scan_plot(msg)
-            elif msg.startswith("OBJECT"):
-                self.busy = True
-                self.canvas.update_object_plot(msg)
-                self.canvas.update_bot_plt(msg, name)
-            elif msg.startswith("POS"):
-                self.busy = True
-                self.canvas.update_bot_plt(msg, name)
-        elif name == "Auto":
-            if msg.startswith("ACK"):
+            elif name == "Auto":
                 if self.setup_auto_state >= 0:
                     self.connect_auto_cybot()
-            elif msg.startswith("OBJECT"):
-                self.canvas.update_bot_plt(msg, name)
-            elif msg.startswith("POS"):
-                self.canvas.update_bot_plt(msg, name)
+        elif msg.startswith("CLEAR"):
+            if name == "Manual":
+                self.busy = True
+            self.scan_canvas.update_scan_plot(msg, name)
+            self.scan_canvas.update_object_plot(msg, name)
+        elif (name == "Manual" and self.scan_canvas.manual_in_scan) or (name == "Auto" and self.scan_canvas.auto_in_scan) or msg.startswith("STARTSCAN") or msg.startswith("ENDSCAN"):
+            if name == "Manual":
+                self.busy = True
+            self.scan_canvas.update_scan_plot(msg, name)
+        elif msg.startswith("OBJECT"):
+            if name == "Manual":
+                self.busy = True
+            self.scan_canvas.update_object_plot(msg, name)
+            self.field_canvas.update_bot_plt(msg, name)
+        elif msg.startswith("POS"):
+            if name == "Manual":
+                self.busy = True
+            self.field_canvas.update_bot_plt(msg, name)
 
     def connect_manual_cybot(self):
         if self.setup_manual_state == 0:
