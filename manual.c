@@ -46,11 +46,11 @@ int run_manual(oi_t *data, cyBOT_Scan_t *scan_data) {
                             break;
                         case 0b10:
                             // Left
-                            turn_counterclockwise(data, 10, 120);
+                            turn_counterclockwise(data, 10, 50);
                             break;
                         case 0b11:
                             // Right
-                            turn_clockwise(data, 10, 120);
+                            turn_clockwise(data, 10, 50);
                             break;
                     }
                     break;
