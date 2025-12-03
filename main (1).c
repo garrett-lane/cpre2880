@@ -244,6 +244,14 @@ void main()
     int found_gap = 0;
     int gap_center_angle = 90;
     int k = 1;
+    int obj_count;
+    int i;
+    int right_start;
+    int left_end;
+    int gap_degrees;
+    float gap_angle_rad;
+    float gap_distance;
+    float gap_width;
 	while (k)
 {
     //1. Full scan
@@ -251,28 +259,27 @@ void main()
     lcd_clear();
     //2. Detect objects
     Object_t objects[12];
-    int obj_count = find_objects(scan_sensor_data_array, 0, 180, objects);
+    obj_count = find_objects(scan_sensor_data_array, 0, 180, objects);
 
     //3. Use math find gaps
 
     found_gap = 0;
-    int i;
     for (i = 0; i <= obj_count - 1; i++)
     {
-        int right_start = objects[i].end;
-        int left_end  = objects[i+1].start;
+        right_start = objects[i].end;
+        left_end  = objects[i+1].start;
 
-        int gap_degrees = left_end - right_start;
+        gap_degrees = left_end - right_start;
 
         if (gap_degrees > 0)
         {
-            float gap_angle_rad = gap_degrees * (M_PI / 180.0);
+            gap_angle_rad = gap_degrees * (M_PI / 180.0);
 
             
-            float gap_distance = fmin(objects[i].distance, objects[i+1].distance);
+            gap_distance = fmin(objects[i].distance, objects[i+1].distance);
 
            
-            float gap_width = gap_distance * gap_angle_rad;
+            gap_width = gap_distance * gap_angle_rad;
 
             if (gap_width >= ROBOT_WIDTH)
             {
