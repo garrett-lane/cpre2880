@@ -16,9 +16,10 @@
 #define CALIBRATION_180_DEG 216
 #define CALIBRATION_0_DEG -104
 
-#define STRAIGHT_MULTIPLIER 1.0
-#define TURN_MULTIPLIER 0.9
+#define STRAIGHT_MULTIPLIER 0.995 // typically overshoots by 0.05% with a multiplier of 1
+#define TURN_MULTIPLIER 1 // don't think should ever need to change
 
+// requires regular calibration per robot
 #define VTOCM_COEFF 195624.387
 #define VTOCM_EXP -1.27217
 
