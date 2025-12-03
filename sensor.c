@@ -57,7 +57,7 @@ void process_noisy_data(int angle, cyBOT_Scan_t *scan_data) {
 
     if (scan_index == 0) {
         scan_sensor_data_array[scan_index].sound_dist = scan_data->sound_dist;
-        scan_sensor_data_array[scan_index].IR_raw_val = vToCm < 500 ? vToCm : 500;
+        scan_sensor_data_array[scan_index].IR_raw_val = vToCm < 100 ? vToCm : 100;
         goto process_noisy_data_exit;
     }
 
@@ -79,7 +79,7 @@ void process_noisy_data(int angle, cyBOT_Scan_t *scan_data) {
             obj.IR_raw_val = SCAN_ALPHA_IR * vToCm + (1 - SCAN_ALPHA_IR) * scan_sensor_data_array[scan_index - 2].IR_raw_val;
 
             // Replace old spike
-            scan_sensor_data_array[scan_index - 1].IR_raw_val = obj.IR_raw_val < 500 ? obj.IR_raw_val : 500;
+            scan_sensor_data_array[scan_index - 1].IR_raw_val = obj.IR_raw_val < 100 ? obj.IR_raw_val : 100;
             putty_printf("%3d\t%10f\t%10d\n", angle - 2, scan_sensor_data_array[scan_index - 1].sound_dist, scan_sensor_data_array[scan_index - 1].IR_raw_val);
             timer_waitMillis(100);
 
@@ -88,8 +88,8 @@ void process_noisy_data(int angle, cyBOT_Scan_t *scan_data) {
         }
     }
 
-    if (obj.IR_raw_val > 500) {
-        obj.IR_raw_val = 500;
+    if (obj.IR_raw_val > 100) {
+        obj.IR_raw_val = 100;
     }
 
     scan_sensor_data_array[scan_index] = obj;

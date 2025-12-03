@@ -60,11 +60,13 @@ int find_objects(cyBOT_Scan_t data_array[], int start_angle, int end_angle, Obje
             in_object = 1;
             objStartIndex = i;
         } else if (in_object && data_array[i].IR_raw_val > 1.15 * data_array[i-1].IR_raw_val) { // if distance is > 115% of prev. data item, end object
-            objects[j].distance = data_array[(i-objStartIndex) / 2].sound_dist;
+            objects[j].distance = data_array[(i + objStartIndex) / 2].sound_dist;
             objects[j].end = start_angle + ((i-1) * 2);
             objects[j].center_angle = (objects[j].start + objects[j].end) / 2.0;
             objects[j].linear_width = objects[j].distance * ((objects[j].end - objects[j].start) * (PI / 180.0));
-            putty_send_object(&objects[j]);
+            if(objects[j].linear_width > 2){
+                putty_send_object(&objects[j]);
+            }
             j++;
             in_object = 0;
             if(j>11){
@@ -78,7 +80,8 @@ int find_objects(cyBOT_Scan_t data_array[], int start_angle, int end_angle, Obje
     return j;
 }
 void progress(oi_t *data){
-    int d = move_forward(data, 100, 80);
+    int d = 0;
+    d = move_forward(data, 100, 80);
 
     if (d < 100)
     {
@@ -86,23 +89,29 @@ void progress(oi_t *data){
             data->cliffLeftSignal > 2600 || data->cliffFrontLeftSignal > 2600)
         {
             move_backward(data, 100, 80);
-            turn_clockwise(data, 45, 80);
+            turn_clockwise(data, 90, 80);
+            return;
         }
         if (data->cliffRight || data->cliffFrontRight ||
             data->cliffRightSignal > 2600 || data->cliffFrontRightSignal > 2600)
         {
             move_backward(data, 100, 80);
-            turn_counterclockwise(data, 45, 80);
+            turn_counterclockwise(data, 90, 80);
+            return;
         }
         if (data->bumpLeft)
         {
             move_backward(data, 100, 80);
             turn_clockwise(data, 90, 80);
+            timer_waitMillis(500);
+            return;
         }
         if (data->bumpRight)
         {
             move_backward(data, 100, 80);
             turn_counterclockwise(data, 90, 80);
+            timer_waitMillis(500);
+            return;
         }
     }
 }
@@ -234,7 +243,8 @@ void main()
     const float ROBOT_WIDTH = 32.0;
     int found_gap = 0;
     int gap_center_angle = 90;
-	while (1)
+    int k = 1;
+	while (k)
 {
     //1. Full scan
     scan_full_arc(&scan_data, 0, 180);
@@ -247,12 +257,12 @@ void main()
 
     found_gap = 0;
     int i;
-    for (i = 0; i < obj_count - 1; i++)
+    for (i = 0; i <= obj_count - 1; i++)
     {
-        int left_end  = objects[i].end;
-        int right_start = objects[i+1].start;
+        int right_start = objects[i].end;
+        int left_end  = objects[i+1].start;
 
-        int gap_degrees = right_start - left_end;
+        int gap_degrees = left_end - right_start;
 
         if (gap_degrees > 0)
         {
@@ -266,34 +276,33 @@ void main()
 
             if (gap_width >= ROBOT_WIDTH)
             {
-                found_gap = 1;
-                lcd_puts("found gap");
-                gap_center_angle = left_end + gap_degrees / 2;
-                lcd_printf("%d", gap_center_angle);
-                break;
+                if(obj_count != 2){
+                    found_gap = 1;
+                    lcd_puts("found gap");
+                    gap_center_angle = right_start + gap_degrees / 2;
+                    lcd_printf("%d", gap_center_angle);
+                    break;
+                }
             }
         }
     }
 
     //4. Shoot the gap, first valid one
-    if (found_gap)
-    {
-        
-        if (gap_center_angle < 90)
+    if (found_gap){
+        if (gap_center_angle < 90){
             turn_clockwise(data, 90 - gap_center_angle, 80);
-        else
+        }else{
             turn_counterclockwise(data, gap_center_angle - 90, 80);
-
+        }
         progress(data);
         
-    }else if(obj_count == 2){
+    }else if(obj_count <= 2){
         progress(data);
-    }
-    else
-    {
+    }else{
         //5. No gap, 180°
         turn_counterclockwise(data, 180, 80);
     }
+
 }
 #endif
 
