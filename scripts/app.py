@@ -664,7 +664,7 @@ class MainWindow(QMainWindow):
         if offset > 0:
             # Add
             self.auto_messages.append(0b10110000 | abs(offset))
-        else:
+        elif offset < 0:
             # Subtract
             self.auto_messages.append(0b10111000 | abs(offset))
 
@@ -690,7 +690,7 @@ class MainWindow(QMainWindow):
         if offset > 0:
             # Add
             self.manual_messages.append(0b10110000 | abs(offset))
-        else:
+        elif offset < 0:
             # Subtract
             self.manual_messages.append(0b10111000 | abs(offset))
 
