@@ -42,7 +42,7 @@ class SetupDialog(QDialog):
         self.distance_spin.setValue(10)
 
         self.side_combo = QComboBox()
-        self.side_combo.addItems(["left", "right"])
+        self.side_combo.addItems(["right", "left"])
         self.side_label = QLabel(f"of {self.other_bot} bot.")
 
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -86,12 +86,39 @@ class SetupDialog(QDialog):
         self.facing_label.setText(f"{self.other_bot} bot.")
 
     def calculate_distance(self):
-        distance = self.distance_spin.value()
-        val = int(distance / 6.7)
-        extra = int(distance % 6.7)
-        if int((val * 6.7) + extra) != distance:
-            print("misalign")
-        print(f"{distance} - {val} + {extra} - {bytes(val)} + {bytes(extra)}")
+        sign = 1.0 if self.side_combo.currentText() == "right" else -1.0
+        dist = sign * float(self.distance_spin.value())
+
+        calc = int(round(dist / 6.7))
+
+        best_steps = calc
+        best_offset = 0
+        best_error = float("inf")
+
+        for steps in range(calc - 1, calc + 2):
+            for offset in range(-7, 8):
+                approx = steps * 6.7 + offset
+
+                error = abs(approx - dist)
+                if error < best_error:
+                    best_error = error
+                    best_steps = steps
+                    best_offset = offset
+
+        print(f"Input {dist:.2f} cm, steps: {best_steps}, offset: {best_offset}, actual: {best_steps * 6.7 + best_offset:.2f} cm")
+
+        return best_steps, best_offset
+
+    def get_angle(self):
+        match self.facing_combo.currentText():
+            case "the same direction as":
+                return 2
+            case "towards":
+                return 4 if self.side_combo.currentText() == "right" else 1
+            case "opposite direction of":
+                return 8
+            case "away from":
+                return 1 if self.side_combo.currentText() == "right" else 4
 
 
 class FieldCanvas(FigureCanvas):
@@ -439,6 +466,8 @@ class ClientManager(QObject):
 
 class MainWindow(QMainWindow):
     busy = True
+    manual_messages = []
+    auto_messages = []
     setup_manual_state = 0
     setup_auto_state = 0
 
@@ -493,9 +522,7 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(1, 2)
 
         self.manual_client = ClientManager("wlp1s0", "Manual")
-        self.manual_client.launch()
         self.auto_client = ClientManager("wlp193s0f3u1", "Auto")
-        self.auto_client.launch()
 
         self.timer = QTimer()
         self.timer.setInterval(100)
@@ -521,7 +548,14 @@ class MainWindow(QMainWindow):
 
         setup = SetupDialog()
         if setup.exec() == QDialog.Accepted:
-            setup.calculate_distance()
+            step, offset = setup.calculate_distance()
+            if setup.other_bot == "Manual":
+                self.setup_for_auto(setup, step, offset)
+            elif setup.other_bot == "Auto":
+                self.setup_for_manual(setup, step, offset)
+
+            self.manual_client.launch()
+            self.auto_client.launch()
         else:
             sys.exit(0)
 
@@ -600,31 +634,70 @@ class MainWindow(QMainWindow):
             self.field_canvas.update_bot_plt(msg, name)
 
     def connect_manual_cybot(self):
-        if self.setup_manual_state == 0:
-            self.manual_client.sendMessage(0b10000000)
-            self.setup_manual_state = 1
-        elif self.setup_manual_state == 1:
-            self.manual_client.sendMessage(0b10100000)
-            self.setup_manual_state = 2
-        elif self.setup_manual_state == 2:
-            self.manual_client.sendMessage(0b10111000)
-            self.setup_manual_state = 3
-        elif self.setup_manual_state == 3:
-            self.manual_client.sendMessage(0b11000010)
+        self.manual_client.sendMessage(self.manual_messages[self.setup_manual_state])
+        self.setup_manual_state += 1
+        if self.setup_manual_state > len(self.manual_messages):
             self.setup_manual_state = -1
             self.input_line.setEnabled(True)
 
     def connect_auto_cybot(self):
         print("[Auto]: setup")
-        if self.setup_auto_state == 0:
-            self.auto_client.sendMessage(0b10001100)
-            self.setup_auto_state = 1
-        elif self.setup_auto_state == 1:
-            self.auto_client.sendMessage(0b10100100)
-            self.setup_auto_state = 2
-        elif self.setup_auto_state == 2:
-            self.auto_client.sendMessage(0b11000010)
+        self.auto_client.sendMessage(self.auto_messages[self.setup_auto_state])
+        self.setup_auto_state += 1
+        if self.setup_auto_state > len(self.auto_messages):
             self.setup_auto_state = -1
+
+    def setup_for_auto(self, setup, step, offset):
+        # Position
+        self.manual_messages.append(0b10000000)
+        # Angle (90)
+        self.manual_messages.append(0b10100010)
+        # Done
+        self.manual_messages.append(0b11000010)
+
+        # Position
+        self.auto_messages.append(0b10000000 | abs(step))
+        if step < 0:
+            # Negative
+            self.auto_messages.append(0b10111000)
+
+        if offset > 0:
+            # Add
+            self.auto_messages.append(0b10110000 | abs(offset))
+        else:
+            # Subtract
+            self.auto_messages.append(0b10111000 | abs(offset))
+
+        # Angle
+        self.auto_messages.append(0b10111000 | setup.get_angle())
+        # Done
+        self.auto_messages.append(0b11000010)
+
+    def setup_for_manual(self, setup, step, offset):
+        # Position
+        self.auto_messages.append(0b10000000)
+        # Angle (90)
+        self.auto_messages.append(0b10100010)
+        # Done
+        self.auto_messages.append(0b11000010)
+
+        # Position
+        self.manual_messages.append(0b10000000 | abs(step))
+        if step < 0:
+            # Negative
+            self.manual_messages.append(0b10111000)
+
+        if offset > 0:
+            # Add
+            self.manual_messages.append(0b10110000 | abs(offset))
+        else:
+            # Subtract
+            self.manual_messages.append(0b10111000 | abs(offset))
+
+        # Angle
+        self.manual_messages.append(0b10111000 | setup.get_angle())
+        # Done
+        self.manual_messages.append(0b11000010)
 
 
 if __name__ == "__main__":
