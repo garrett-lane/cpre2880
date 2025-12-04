@@ -30,9 +30,9 @@ int find_objects(cyBOT_Scan_t data_array[], int start_angle, int end_angle, Obje
 
     int in_object = 0;
 
-    int i = 1;
+    int i;
     int j = 0;
-    objects[j].distance = 501;
+    objects[j].distance = 10;
     objects[j].end = 0;
     objects[j].start = 0;
     j++;
@@ -85,14 +85,14 @@ void progress(oi_t *data) {
         if (data->bumpLeft)
         {
             move_backward(data, 100, 80);
-            turn_clockwise(data, 90, 50);
+            turn_clockwise(data, 120, 50);
             timer_waitMillis(500);
             return;
         }
         if (data->bumpRight)
         {
             move_backward(data, 100, 80);
-            turn_counterclockwise(data, 90, 50);
+            turn_counterclockwise(data, 120, 50);
             timer_waitMillis(500);
             return;
         }
@@ -109,8 +109,15 @@ int run_auto(oi_t *data, cyBOT_Scan_t *scan_data) {
     int right_start;
     int left_end;
     int gap_degrees;
-    float gap_angle_rad;
-    float gap_distance;
+   // float gap_angle_rad;  old stuff not work
+   // float gap_distance;
+    float theta_rad; // new good hopefully
+    float d_left_edge;
+    float d_right_edge;
+    float d;
+    int left;
+    int right;
+    int center;
     float gap_width;
     char temp;
 
@@ -168,15 +175,22 @@ int run_auto(oi_t *data, cyBOT_Scan_t *scan_data) {
                 left_end  = objects[i+1].start;
                 gap_degrees = left_end - right_start;
                 if (gap_degrees > 0) {
-                    gap_angle_rad = gap_degrees * (M_PI / 180.0);
-                    gap_distance = fmin(objects[i].distance, objects[i+1].distance);
-                    gap_width = gap_distance * gap_angle_rad;
+
+                    theta_rad = gap_degrees * (M_PI / 180.0);
+
+                    // distances at the edges, instead of center
+                    d_left_edge  = objects[i].distance;
+                    d_right_edge = objects[i+1].distance;
+
+                    // use the farther edge instead of previous closer one
+                    d = fmax(d_left_edge, d_right_edge);
+
+                    // better width calc hopefully
+                    gap_width = 2.0 * d * sin(theta_rad / 2.0);
 
                     if (gap_width >= ROBOT_WIDTH) {
                         found_gap = 1;
-                        lcd_puts("found gap");
-                        gap_center_angle = right_start + gap_degrees / 2;
-                        lcd_printf("%d", gap_center_angle);
+                        gap_center_angle = objects[i].end + gap_degrees / 2.0;
                         break;
                     }
                 }
@@ -193,11 +207,21 @@ int run_auto(oi_t *data, cyBOT_Scan_t *scan_data) {
             progress(data);
 
         // enter larger side (left or right) of only object
-        } else if (obj_count == 1) {
-            if ((objects[0].end + objects[0].start) / 2 < 90) {
-                turn_clockwise(data, (180 - objects[0].start) / 2, 50);
+        } else if (obj_count == 3) {
+            left = objects[1].start;
+            right = 180 - objects[1].end;
+
+            if (left > right) {
+                center = left / 2;
+
             } else {
-                turn_counterclockwise(data, objects[0].end / 2, 50);
+                center = (right / 2) + objects[1].end;
+
+            }
+            if(center < 90){
+                turn_clockwise(data, 90 - center, 50);
+            }else{
+                turn_counterclockwise(data, center - 90, 50);
             }
             progress(data);
         } else {
