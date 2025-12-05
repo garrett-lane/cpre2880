@@ -22,4 +22,3 @@ Position: 10
 Other: 11
 11 000 000 ack
 11 000 001 reset
-11 000 010 done

@@ -117,7 +117,7 @@ void main()
     set_servo_calibation(CALIBRATION_0_DEG, CALIBRATION_180_DEG);
 
     lcd_clear();
-    lcd_printf("V1");
+    lcd_puts("v1.3");
 
 #if MANUAL
     run_manual(data, &scan_data);

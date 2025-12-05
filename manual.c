@@ -33,7 +33,8 @@ int run_manual(oi_t *data, cyBOT_Scan_t *scan_data) {
                     switch ((temp >> 4) & 0x3) {
                         case 0b00:
                             // Foward
-                            move_forward(data, 50, 120);
+                            servo_move(90);
+                            move_forward(data, 50, 150);
                             if (data->bumpLeft) {
                                 putty_printf("BUMP 0\n");
                             } else if (data->bumpRight) {
@@ -42,7 +43,7 @@ int run_manual(oi_t *data, cyBOT_Scan_t *scan_data) {
                             break;
                         case 0b01:
                             // Backward
-                            move_backward(data, 50, 120);
+                            move_backward(data, 50, 150);
                             break;
                         case 0b10:
                             // Left
@@ -72,7 +73,7 @@ int run_manual(oi_t *data, cyBOT_Scan_t *scan_data) {
                     // Position
                     // Set base position
                     if (!(temp & 0x20)) {
-                        // 130 mm * x
+                        // 67 mm * x
                         pos_x = 67 * (temp & 0x1F);
                         pos_y = 0;
                     } else {
@@ -93,10 +94,10 @@ int run_manual(oi_t *data, cyBOT_Scan_t *scan_data) {
                                 pos_x = -pos_x;
                             } else if ((temp & 0x0F) < 0x8) {
                                 // Add x centimeters to x
-                                pos_x += temp & 0x07;
+                                pos_x += (temp & 0x07) * 10;
                             } else if ((temp & 0x0F) > 0x8) {
                                 // Sub x centimeters to x
-                                pos_x -= temp & 0x07;
+                                pos_x -= (temp & 0x07) * 10;
                             }
                         }
                     }

@@ -12,7 +12,8 @@ void balloon_init() {
     // interrupt init stuffs
     GPIO_PORTD_IM_R &= ~0x01; // unmask to make changes
     GPIO_PORTD_IS_R &= ~0x01; // set to be edge sensitive
-    GPIO_PORTD_IBE_R |= 0x01; // set to trigger on both edges
+    GPIO_PORTD_IBE_R &= ~0x01; // set to NOT trigger on both edges
+    GPIO_PORTD_IEV_R &= ~0x01; // set to trigger on falling edge
     GPIO_PORTD_ICR_R |= 0x01; // clear raw interrupt
     GPIO_PORTD_IM_R |= 0x01; // unmask to make changes
 
@@ -25,17 +26,10 @@ void balloon_init() {
 }
 
 int read_balloon() {
-    return GPIO_PORTD_DATA_R & ~0xFE;
+    return GPIO_PORTD_DATA_R && 0x1;
 }
 
 void balloon_handler() {
     GPIO_PORTD_ICR_R |= 0x01;
     balloon_flag = 1;
-    lcd_printf("Balloon Status: %d", read_balloon());
-
-    unsigned char noteCount = 14;
-    unsigned char notes[14] = {81, 74, 77, 76, 74, 81, 79, 76, 74, 77, 76, 73, 75, 69};
-    unsigned char durations[14] = {32, 48, 16, 32, 64, 32, 96, 96, 48, 16, 32, 64, 32, 96 };
-    oi_loadSong(0, noteCount, notes, durations);
-    oi_play_song(0);
 }

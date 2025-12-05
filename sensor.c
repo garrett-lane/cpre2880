@@ -57,43 +57,11 @@ void process_noisy_data(int angle, cyBOT_Scan_t *scan_data) {
 
     if (scan_index == 0) {
         scan_sensor_data_array[scan_index].sound_dist = scan_data->sound_dist;
-        scan_sensor_data_array[scan_index].IR_raw_val = vToCm;
-        goto process_noisy_data_exit;
-    }
-
-    cyBOT_Scan_t obj;
-
-    if (scan_data->sound_dist > 0.85 * scan_sensor_data_array[scan_index - 1].sound_dist &&
-            scan_data->sound_dist < 1.15 * scan_sensor_data_array[scan_index - 1].sound_dist) {
-        obj.sound_dist = SCAN_ALPHA_SOUND * scan_data->sound_dist + (1 - SCAN_ALPHA_SOUND) * scan_sensor_data_array[scan_index - 1].sound_dist;
-    } else {
-        obj.sound_dist = scan_data->sound_dist;
-    }
-
-    if (vToCm > 0.7 * scan_sensor_data_array[scan_index - 1].IR_raw_val &&
-            vToCm < 1.30 * scan_sensor_data_array[scan_index - 1].IR_raw_val) {
-        obj.IR_raw_val = SCAN_ALPHA_IR * vToCm + (1 - SCAN_ALPHA_IR) * scan_sensor_data_array[scan_index - 1].IR_raw_val;
-    } else {
-        obj.IR_raw_val = vToCm;
-    }
-
-    scan_sensor_data_array[scan_index] = obj;
-    /**double vToCm = VTOCM_COEFF * pow(scan_data->IR_raw_val, VTOCM_EXP);
-
-    if (scan_index == 0) {
-        scan_sensor_data_array[scan_index].sound_dist = scan_data->sound_dist;
         scan_sensor_data_array[scan_index].IR_raw_val = vToCm < 100 ? vToCm : 100;
         goto process_noisy_data_exit;
     }
 
     cyBOT_Scan_t obj;
-    obj.sound_dist = scan_data->sound_dist;
-    obj.IR_raw_val = vToCm;
-
-    if (obj.IR_raw_val > 100) {
-        obj.IR_raw_val = 100;
-    }
-
 
     if (scan_data->sound_dist > 0.85 * scan_sensor_data_array[scan_index - 1].sound_dist &&
             scan_data->sound_dist < 1.15 * scan_sensor_data_array[scan_index - 1].sound_dist) {
@@ -123,9 +91,37 @@ void process_noisy_data(int angle, cyBOT_Scan_t *scan_data) {
     if (obj.IR_raw_val > 100) {
         obj.IR_raw_val = 100;
     }
-    */
 
-    //scan_sensor_data_array[scan_index] = obj;
+    scan_sensor_data_array[scan_index] = obj;
+    /*double vToCm = VTOCM_COEFF * pow(scan_data->IR_raw_val, VTOCM_EXP);
+
+    if (scan_index == 0) {
+        scan_sensor_data_array[scan_index].sound_dist = scan_data->sound_dist;
+        scan_sensor_data_array[scan_index].IR_raw_val = vToCm;
+        goto process_noisy_data_exit;
+    }
+
+    cyBOT_Scan_t obj;
+
+    if (scan_data->sound_dist > 0.85 * scan_sensor_data_array[scan_index - 1].sound_dist &&
+            scan_data->sound_dist < 1.15 * scan_sensor_data_array[scan_index - 1].sound_dist) {
+        obj.sound_dist = SCAN_ALPHA_SOUND * scan_data->sound_dist + (1 - SCAN_ALPHA_SOUND) * scan_sensor_data_array[scan_index - 1].sound_dist;
+    } else {
+        obj.sound_dist = scan_data->sound_dist;
+    }
+
+    if (vToCm > 0.7 * scan_sensor_data_array[scan_index - 1].IR_raw_val &&
+            vToCm < 1.30 * scan_sensor_data_array[scan_index - 1].IR_raw_val) {
+        obj.IR_raw_val = SCAN_ALPHA_IR * vToCm + (1 - SCAN_ALPHA_IR) * scan_sensor_data_array[scan_index - 1].IR_raw_val;
+    } else {
+        obj.IR_raw_val = vToCm;
+    }
+
+    if (obj.IR_raw_val > 100) {
+        obj.IR_raw_val = 100;
+    }
+
+    scan_sensor_data_array[scan_index] = obj;*/
 
 process_noisy_data_exit:
     putty_send_scan_data(angle, &scan_sensor_data_array[scan_index]);

@@ -47,7 +47,7 @@ int find_objects(cyBOT_Scan_t data_array[], int start_angle, int end_angle, Obje
             objects[j].end = start_angle + ((i-1) * 2);
             objects[j].center_angle = (objects[j].start + objects[j].end) / 2.0;
             objects[j].linear_width = objects[j].distance * ((objects[j].end - objects[j].start) * (PI / 180.0));
-            if (objects[j].linear_width > 5 && objects[j].linear_width < 20 && objects[j].distance < 300) {
+            if (objects[j].linear_width > 2 && objects[j].linear_width < 20 && objects[j].distance < 300) {
                 putty_send_object(&objects[j]);
                 j++;
             }
@@ -60,46 +60,38 @@ int find_objects(cyBOT_Scan_t data_array[], int start_angle, int end_angle, Obje
     objects[j].distance = 501.0;
     objects[j].end = 180;
     objects[j].start = 180;
-    return j+1;
+    return j;
 }
 
 void progress(oi_t *data) {
-    int d = 0;
-    int i;
-    for (i = 0; i < 5; i++) {
-        d += move_forward(data, 50, 80);
-        /*if (data->cliffLeft || data->cliffFrontLeft ||
-            data->cliffLeftSignal > 2600 || data->cliffFrontLeftSignal > 2600)
-        {
-            lcd_puts("CLIFF");
-            move_backward(data, 100, 80);
-            turn_clockwise(data, 90, 50);
-            return;
-        }
-        if (data->cliffRight || data->cliffFrontRight ||
-            data->cliffRightSignal > 2600 || data->cliffFrontRightSignal > 2600)
-        {
-            lcd_puts("CLIFF");
-            move_backward(data, 100, 80);
-            turn_counterclockwise(data, 90, 50);
-            return;
-        }*/
-        if (data->bumpLeft)
-        {
-            move_backward(data, 100, 80);
-            turn_clockwise(data, 120, 50);
-            lcd_puts("BUMP");
-            timer_waitMillis(500);
-            return;
-        }
-        if (data->bumpRight)
-        {
-            move_backward(data, 100, 80);
-            turn_counterclockwise(data, 120, 50);
-            lcd_puts("BUMP");
-            timer_waitMillis(500);
-            return;
-        }
+    move_forward(data, 75, 80);
+    if (data->cliffLeft || data->cliffFrontLeft ||
+        data->cliffLeftSignal > 2600 || data->cliffFrontLeftSignal > 2600)
+    {
+        move_backward(data, 125, 80);
+        turn_clockwise(data, 90, 50);
+        return;
+    }
+    if (data->cliffRight || data->cliffFrontRight ||
+        data->cliffRightSignal > 2600 || data->cliffFrontRightSignal > 2600)
+    {
+        move_backward(data, 125, 80);
+        turn_counterclockwise(data, 90, 50);
+        return;
+    }
+    if (data->bumpLeft)
+    {
+        move_backward(data, 125, 80);
+        turn_clockwise(data, 120, 50);
+        timer_waitMillis(500);
+        return;
+    }
+    if (data->bumpRight)
+    {
+        move_backward(data, 125, 80);
+        turn_counterclockwise(data, 120, 50);
+        timer_waitMillis(500);
+        return;
     }
 }
 
@@ -130,7 +122,7 @@ int run_auto(oi_t *data, cyBOT_Scan_t *scan_data) {
             temp = uart_data;
             uart_flag = 0;
             if (!(temp & 0x20)) {
-                // 130 mm * x
+                // 67 mm * x
                 pos_x = 67 * (temp & 0x1F);
                 pos_y = 0;
             } else {
@@ -151,10 +143,10 @@ int run_auto(oi_t *data, cyBOT_Scan_t *scan_data) {
                         pos_x = -pos_x;
                     } else if ((temp & 0x0F) < 0x8) {
                         // Add x centimeters to x
-                        pos_x += temp & 0x07;
+                        pos_x += (temp & 0x07) * 10;
                     } else if ((temp & 0x0F) > 0x8) {
                         // Sub x centimeters to x
-                        pos_x -= temp & 0x07;
+                        pos_x -= (temp & 0x07) * 10;
                     }
                 }
             }
@@ -168,14 +160,15 @@ int run_auto(oi_t *data, cyBOT_Scan_t *scan_data) {
         scan_full_arc(scan_data, 0, 180);
         lcd_clear();
         //2. Detect objects
-        Object_t objects[15];
+        Object_t objects[12];
         obj_count = find_objects(scan_sensor_data_array, 0, 180, objects);
 
+        if (balloon_flag) break;
+
         //3. Use math find gaps
-        gap_center_angle = 0;
-        found_gap = 0;
-        if (obj_count > 3) {
-            for (i = 0; i < obj_count-1; i++) {
+        if (obj_count > 1) {
+            found_gap = 0;
+            for (i = 0; i < obj_count; i++) {
                 right_start = objects[i].end;
                 left_end  = objects[i+1].start;
                 gap_degrees = left_end - right_start;
@@ -184,8 +177,8 @@ int run_auto(oi_t *data, cyBOT_Scan_t *scan_data) {
                     theta_rad = gap_degrees * (M_PI / 180.0);
 
                     // distances at the edges, instead of center
-                    d_left_edge  = objects[i+1].distance;
-                    d_right_edge = objects[i].distance;
+                    d_left_edge  = objects[i].distance;
+                    d_right_edge = objects[i+1].distance;
 
                     // use the farther edge instead of previous closer one
                     d = fmax(d_left_edge, d_right_edge);
@@ -202,10 +195,11 @@ int run_auto(oi_t *data, cyBOT_Scan_t *scan_data) {
             }
         }
 
+        if (balloon_flag) break;
+
         //4. Enter first valid gap
         if (found_gap) {
             if (gap_center_angle < 90) {
-                lcd_printf("Going to gap: %d", gap_center_angle);
                 turn_clockwise(data, 90 - gap_center_angle, 50);
             } else {
                 turn_counterclockwise(data, gap_center_angle - 90, 50);
@@ -214,7 +208,6 @@ int run_auto(oi_t *data, cyBOT_Scan_t *scan_data) {
 
         // enter larger side (left or right) of only object
         } else if (obj_count == 3) {
-            center = 0;
             left = objects[1].start;
             right = 180 - objects[1].end;
 
@@ -226,19 +219,13 @@ int run_auto(oi_t *data, cyBOT_Scan_t *scan_data) {
 
             }
             if(center < 90){
-                lcd_printf("One object found, going right: %d", center);
                 turn_clockwise(data, 90 - center, 50);
             }else{
-                lcd_printf("One object found, going left: %d", center);
                 turn_counterclockwise(data, center - 90, 50);
             }
             progress(data);
-        }else if(obj_count == 2){
-            progress(data);
-            lcd_puts("No object");
         } else {
             //5. No gap, 180°
-            lcd_puts("No gap");
             turn_counterclockwise(data, 90, 50);
         }
 

@@ -13,7 +13,6 @@ int move(oi_t *sensor, double distance_mm, int speed_mm, int forward) {
     // Calibration #s for CyBot (see calibration.h)
     distance_mm = distance_mm * STRAIGHT_MULTIPLIER;
     double dist = 0;
-    int speed = speed_mm;
 
     oi_setWheels(speed_mm, speed_mm); // Sets and converts the speed from mm/s
     while (forward ? dist < distance_mm : dist > distance_mm) {
@@ -22,18 +21,29 @@ int move(oi_t *sensor, double distance_mm, int speed_mm, int forward) {
         if (forward & (distance_mm - dist < dist * 0.1)) {
             // lcd_puts("FORWARD");
             oi_setWheels(15, 15);
-            speed = 15;
         } else if (!forward & (distance_mm - dist > dist * 0.1)) {
             // lcd_puts("BACKWARD");
             oi_setWheels(-15, -15);
-            speed = -15;
         }
         // lcd_clear();
         // lcd_printf("%.1f / %.1f at speed: %d", dist, distance_mm, speed);
         if (forward && (sensor->bumpLeft || sensor->bumpRight)) {
             break;
         }
-        if (sensor->cliffLeft || sensor->cliffFrontLeft || sensor->cliffFrontRight || sensor->cliffFrontRight) {
+        if (sensor->cliffLeft || sensor->cliffFrontLeft) {
+            putty_printf("TAPE 0 0");
+            break;
+        }
+        if (sensor->cliffFrontRight || sensor->cliffFrontRight) {
+            putty_printf("TAPE 0 1");
+            break;
+        }
+        if (sensor->cliffLeftSignal > 2600 || sensor->cliffFrontLeftSignal > 2600) {
+            putty_printf("TAPE 1 0");
+            break;
+        }
+        if (sensor->cliffRightSignal > 2600 || sensor->cliffFrontRightSignal > 2600) {
+            putty_printf("TAPE 1 1");
             break;
         }
 
