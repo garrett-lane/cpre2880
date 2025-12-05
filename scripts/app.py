@@ -8,6 +8,7 @@ from PySide6.QtCore import QTimer, QObject, Signal, Slot
 from PySide6 import QtCore, QtNetwork
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 
@@ -144,8 +145,8 @@ class FieldCanvas(FigureCanvas):
         super().__init__(fig)
 
     def create_bot_graph(self, ax, title):
-        ax.set_xlim(-8.54, 8.54)
-        ax.set_ylim(-8.54, 8.54)
+        ax.set_xlim(-6, 6)
+        ax.set_ylim(-6, 6)
         ax.set_title(title, size=12, y=1.0)
 
     def update_bot_plt(self, line, name):
@@ -165,6 +166,9 @@ class FieldCanvas(FigureCanvas):
             angle = np.radians(float(data[1].strip()))
             distance = float(data[2].strip()) / 100
             width = int(data[3].strip()) / 200
+            color = 'green'
+            if name == "Auto":
+                color = 'yellow'
 
             x, y = (0, 0)
             if name == "Manual":
@@ -176,7 +180,7 @@ class FieldCanvas(FigureCanvas):
                 x += (0.166 * np.cos(self.auto_bot_angle)) + (distance * np.cos(self.auto_bot_angle + angle - np.radians(90))) + (width / 2)
                 y += (0.166 * np.sin(self.auto_bot_angle)) + (distance * np.sin(self.auto_bot_angle + angle - np.radians(90))) + (width / 2)
 
-            circle = plt.Circle((x, y), width, color='green', fill=None, linewidth=1)
+            circle = plt.Circle((x, y), width, color=color, fill=None, linewidth=1)
             self.bot_ax.add_patch(circle)
 
             self.draw()
@@ -484,8 +488,16 @@ class MainWindow(QMainWindow):
         self.field_canvas = FieldCanvas(self)
         self.scan_canvas = MplCanvas(self)
 
+        self.toolbar = NavigationToolbar(self.field_canvas, self)
+
+        field_wrapper = QWidget()
+
+        self.field_layout = QVBoxLayout(field_wrapper)
+        self.field_layout.addWidget(self.toolbar)
+        self.field_layout.addWidget(self.field_canvas)
+
         self.canvas_tab = QTabWidget()
-        self.canvas_tab.addTab(self.field_canvas, "Field")
+        self.canvas_tab.addTab(field_wrapper, "Field")
         self.canvas_tab.addTab(self.scan_canvas, "Scans")
 
         button_layout = QVBoxLayout()
