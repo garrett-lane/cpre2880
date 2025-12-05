@@ -387,7 +387,7 @@ class MplCanvas(FigureCanvas):
 
 class ClientManager(QObject):
     connected = Signal()
-    new_message = Signal(str, str, QObject)
+    new_message = Signal(str, str)
     error = Signal(str)
 
     def __init__(self, iface_name, name):
@@ -455,7 +455,7 @@ class ClientManager(QObject):
         raw = self._socket.readAll().data().decode("utf-8")
         lines = raw.strip().splitlines()
         for line in lines:
-            self.new_message.emit(line.strip(), self.name, self)
+            self.new_message.emit(line.strip(), self.name)
 
     @Slot(QtNetwork.QAbstractSocket.SocketError)
     def on_error(self, err):
@@ -599,7 +599,7 @@ class MainWindow(QMainWindow):
         self.busy = True
         self.manual_client.sendMessage(0b11000001)
 
-    def parse_message(self, msg, name, client):
+    def parse_message(self, msg, name):
         print(f"[{name}]: {msg}")
         if name == "Manual":
             self.log_manual_box.append(msg)
@@ -636,15 +636,16 @@ class MainWindow(QMainWindow):
     def connect_manual_cybot(self):
         self.manual_client.sendMessage(self.manual_messages[self.setup_manual_state])
         self.setup_manual_state += 1
-        if self.setup_manual_state > len(self.manual_messages):
+        if self.setup_manual_state > len(self.manual_messages) - 1:
             self.setup_manual_state = -1
             self.input_line.setEnabled(True)
+            self.busy = False
 
     def connect_auto_cybot(self):
         print("[Auto]: setup")
         self.auto_client.sendMessage(self.auto_messages[self.setup_auto_state])
         self.setup_auto_state += 1
-        if self.setup_auto_state > len(self.auto_messages):
+        if self.setup_auto_state > len(self.auto_messages) - 1:
             self.setup_auto_state = -1
 
     def setup_for_auto(self, setup, step, offset):
@@ -669,7 +670,7 @@ class MainWindow(QMainWindow):
             self.auto_messages.append(0b10111000 | abs(offset))
 
         # Angle
-        self.auto_messages.append(0b10111000 | setup.get_angle())
+        self.auto_messages.append(0b10100000 | setup.get_angle())
         # Done
         self.auto_messages.append(0b11000010)
 
@@ -695,7 +696,7 @@ class MainWindow(QMainWindow):
             self.manual_messages.append(0b10111000 | abs(offset))
 
         # Angle
-        self.manual_messages.append(0b10111000 | setup.get_angle())
+        self.auto_messages.append(0b10100000 | setup.get_angle())
         # Done
         self.manual_messages.append(0b11000010)
 
