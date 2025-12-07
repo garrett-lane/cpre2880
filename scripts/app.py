@@ -168,7 +168,7 @@ class FieldCanvas(FigureCanvas):
             width = int(data[3].strip()) / 200
             color = 'green'
             if name == "Auto":
-                color = 'yellow'
+                color = 'blue'
 
             x, y = (0, 0)
             if name == "Manual":
@@ -646,6 +646,7 @@ class MainWindow(QMainWindow):
             self.field_canvas.update_bot_plt(msg, name)
 
     def connect_manual_cybot(self):
+        print(f"[Manual]: {self.manual_messages[self.setup_manual_state]}")
         self.manual_client.sendMessage(self.manual_messages[self.setup_manual_state])
         self.setup_manual_state += 1
         if self.setup_manual_state > len(self.manual_messages) - 1:
@@ -654,7 +655,7 @@ class MainWindow(QMainWindow):
             self.busy = False
 
     def connect_auto_cybot(self):
-        print("[Auto]: setup")
+        print(f"[Auto]: {self.auto_messages[self.setup_auto_state]}")
         self.auto_client.sendMessage(self.auto_messages[self.setup_auto_state])
         self.setup_auto_state += 1
         if self.setup_auto_state > len(self.auto_messages) - 1:
@@ -708,7 +709,7 @@ class MainWindow(QMainWindow):
             self.manual_messages.append(0b10111000 | abs(offset))
 
         # Angle
-        self.auto_messages.append(0b10100000 | setup.get_angle())
+        self.manual_messages.append(0b10100000 | setup.get_angle())
         # Done
         self.manual_messages.append(0b11000010)
 
