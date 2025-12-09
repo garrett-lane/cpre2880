@@ -1,5 +1,5 @@
-MANUAL_UUID=1824d2f3-49fa-4b0e-b63f-d62924962dd2
-AUTO_UUID=e23a2a54-dc1d-4342-8232-fe9b142d1044
+MANUAL_UUID=bb010b29-b2df-413f-bf23-d6671c5ae5c1
+AUTO_UUID=43e30262-a5df-4d7c-9fd5-217dbb7b2cdd
 
 nmcli connection modify $MANUAL_UUID ipv4.routing-rules ""
 nmcli connection modify $MANUAL_UUID ipv4.route-table 200
