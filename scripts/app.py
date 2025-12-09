@@ -10,7 +10,6 @@ from PySide6 import QtCore, QtNetwork
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
-from matplotlib.patches import Arc
 import matplotlib.pyplot as plt
 
 import numpy as np
@@ -143,8 +142,6 @@ class FieldCanvas(FigureCanvas):
         self.auto_bot_line, = self.bot_ax.plot([0.5, 0.5], [0, 0.33 / 2], color='red', linewidth=2.0)
         self.bot_ax.add_patch(self.auto_bot)
 
-        self.circles = {}
-
         super().__init__(fig)
 
     def create_bot_graph(self, ax, title):
@@ -163,6 +160,7 @@ class FieldCanvas(FigureCanvas):
                 self.auto_bot_pos = (int(data[1]) / 1000, int(data[2]) / 1000)
                 self.auto_bot_angle = np.radians(int(data[3]))
                 self.draw_auto_bot()
+
         elif line.startswith("OBJECT"):
             data = line.split()
             angle = np.radians(float(data[1].strip()))
@@ -184,16 +182,7 @@ class FieldCanvas(FigureCanvas):
 
             circle = plt.Circle((x, y), width, color=color, fill=None, linewidth=1)
             self.bot_ax.add_patch(circle)
-            self.draw()
-        elif line.startswith("BUMP"):
-            data = line.split()
-            print(data)
-            if int(data[1]) == 0:
-                arc = Arc(self.manual_bot_pos, width=0.33, height=0.33, angle=np.degrees(self.manual_bot_angle), theta1=0, theta2=90, color='#e75480', linewidth=2)
-                self.bot_ax.add_patch(arc)
-            if int(data[1]) == 1:
-                arc = Arc(self.manual_bot_pos, width=0.33, height=0.33, angle=np.degrees(self.manual_bot_angle), theta1=270, theta2=360, color='#e75480', linewidth=2)
-                self.bot_ax.add_patch(arc)
+
             self.draw()
 
     def draw_manual_bot(self):
@@ -654,8 +643,6 @@ class MainWindow(QMainWindow):
         elif msg.startswith("POS"):
             if name == "Manual":
                 self.busy = True
-            self.field_canvas.update_bot_plt(msg, name)
-        elif msg.startswith("BUMP"):
             self.field_canvas.update_bot_plt(msg, name)
 
     def connect_manual_cybot(self):
