@@ -29,10 +29,17 @@ void scan_full_arc(cyBOT_Scan_t *scan_data, int start_angle, int stop_angle);
 
 // Process noisy data using exponential smoothing
 void process_noisy_data(int angle, cyBOT_Scan_t *scan_data);
+
+// Callback to get center distance of object
 void get_center_distance(int angle, cyBOT_Scan_t *scan_data);
 
+// Creates an object struct
 Object_t create_object(float dist, int start_angle, int end_angle);
+
+// Updates the linear width of an object
 void object_update_linear_width(Object_t *obj, int start_angle, int end_angle);
+
+// Finds and returns the smallest object detected in scan range
 Object_t find_smallest_objects(cyBOT_Scan_t data_array[], int start_angle, int end_angle, cyBOT_Scan_t *scan_data);
 
 #endif /* SENSOR_H_ */

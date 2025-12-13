@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <inc/tm4c123gh6pm.h>
 
+// Configures the IR sensor on Port B Pin 2
 void configure_reciever() {
     SYSCTL_RCGCGPIO_R |= 0x02;      // enable clock GPIOB (page 340)
     GPIO_PORTB_DIR_R   &= ~0x04;         // pb2 as input
@@ -13,6 +14,7 @@ void configure_reciever() {
 }
 
 
+// Reads the current value from the IR
 int read_reciever() {
     return (GPIO_PORTB_DATA_R & 0x4) >> 2;
 }

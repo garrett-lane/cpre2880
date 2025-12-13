@@ -9,8 +9,10 @@
 extern volatile  short adc_data;
 extern volatile  char adc_flag;
 
+// Initialize ADC0 SS1 on Port B with 64x hardware scans + interrupt
 void adc_init(void);
+
+// Start an ADC conversion for the IR
 void adc_read(void);
-void IR_interrupt_handler();
 
 #endif /* ADC_H_ */

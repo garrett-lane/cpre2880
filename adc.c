@@ -14,6 +14,19 @@
 volatile char adc_flag = 0;
 volatile short adc_data = 0x000;
 
+// Triggers on ADC0 finish conversion, sets flag so program knows new IR data is ready
+void IR_interrupt_handler() {
+    if (ADC0_ISC_R & 0x02) {
+		// write data from ADC0_SSFIFO1_R to somewhere
+	    adc_data = (ADC0_SSFIFO1_R & 0xFFF);
+	    adc_flag = 1;
+	    ADC0_ISC_R |= 0x02;
+	} else {
+		return;
+	}
+}
+
+// Initialize ADC0 SS1 on Port B with 64x hardware scans + interrupt
 void adc_init() {
 	SYSCTL_RCGCGPIO_R |= 0x2; // portb
     SYSCTL_RCGCADC_R |= 0x1; // adc0
@@ -41,18 +54,7 @@ void adc_init() {
 	return;
 }
 
+// Start an ADC conversion for the IR
 void adc_read() {
     ADC0_PSSI_R |= 0x2;
-
-}
-
-void IR_interrupt_handler() {
-    if (ADC0_ISC_R & 0x02) {
-		// write data from ADC0_SSFIFO1_R to somewhere
-	    adc_data = (ADC0_SSFIFO1_R & 0xFFF);
-	    adc_flag = 1;
-	} else {
-		return;
-	}
-	ADC0_ISC_R |= 0x02;
 }

@@ -27,8 +27,13 @@
 //#define VTOCM_COEFF 58172.587537 // BOT 2
 //#define VTOCM_EXP -1.068098 // BOT 2
 
+// Calibrates IR sensor by comparing readings with ultrasonic sensor
 void calibrate_ir(oi_t *data);
+
+// Servo calibration using buttons
 void calibrate_servo();
+
+// Averages multiple IR sensor readings
 double avg_ir_scan();
 
 #endif /* CALIBRATION_H_ */

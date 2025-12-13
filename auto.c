@@ -1,6 +1,3 @@
-// Autonomous navigation mode for CyBot
-// Scans for objects, finds gaps, and navigates autonomously
-
 #include "adc.h"
 #include "balloon.h"
 #include "button.h"
@@ -24,22 +21,21 @@
 
 #define PI 3.14159
 
-// Scans IR sensor data to detect and identify objects in front of the bot
-// Returns: Number of objects found
+// Parses IR sensor data to find objects in front of bot.
 int find_objects(cyBOT_Scan_t data_array[], int start_angle, int end_angle, Object_t objects[])
 {
     int objStartIndex = 0;
 
-    int in_object = 0; // boolean for in object
+    int in_object = 0; // Flag to make sure objects get closed properly
 
     int i;
     int j = 0;
+    // Make an arbitrary object at 0 degrees
     objects[j].distance = 10;
     objects[j].end = 0;
     objects[j].start = 0;
     j++;
 
-    // Loop through scan data and find objects, store them in objects arr
     for (i = 1; i < 91; i++)
     {
         // if distance is < 8% of prev. value, start object
@@ -62,25 +58,25 @@ int find_objects(cyBOT_Scan_t data_array[], int start_angle, int end_angle, Obje
                 j++;
             }
             in_object = 0;
-            // shouldnt have this many objs
+            // Won't be this many objects
             if (j > 11)
             {
                 break;
             }
         }
     }
+    // Make second arbitrary object at 180 degrees
     objects[j].distance = 501.0;
     objects[j].end = 180;
     objects[j].start = 180;
     return j + 1;
 }
 
-// Moves robot forward while monitoring for obstacles
-// Detects tape and bumps, takes EVASIVE (IF EVASION NOT POSSIBLE, EXECUTE) action
+// Moves robot forward
 void progress(oi_t *data)
 {
     move_forward(data, 75, 80);
-    // Detects black and white tape on the left, and directs away from it
+    // Detects black and white tape on the left, and maneuvers away from it
     if (data->cliffLeft || data->cliffFrontLeft ||
         data->cliffLeftSignal > 2600 || data->cliffFrontLeftSignal > 2600)
     {
@@ -89,7 +85,7 @@ void progress(oi_t *data)
         turn_clockwise(data, 90, 50);
         return;
     }
-    // Detects black and white tape on the right, and directs away from it
+    // Detects black and white tape on the right, and maneuvers away from it
     if (data->cliffRight || data->cliffFrontRight ||
         data->cliffRightSignal > 2600 || data->cliffFrontRightSignal > 2600)
     {
@@ -118,9 +114,8 @@ void progress(oi_t *data)
     }
 }
 
-// Main autonomous navigation function
-// Continuously scans for objects, finds navigable gaps, and moves toward them
-// Stops when balloon sensor is triggered
+// Autonomous navigation mode for CyBot
+// Scans for objects, finds gaps, and navigates autonomously
 int run_auto(oi_t *data, cyBOT_Scan_t *scan_data)
 {
     const float ROBOT_WIDTH = 32.0;
@@ -131,7 +126,7 @@ int run_auto(oi_t *data, cyBOT_Scan_t *scan_data)
     int right_start;
     int left_end;
     int gap_degrees;
-    float theta_rad;
+    float theta_rad; // new math good, hopefully
     float d_left_edge;
     float d_right_edge;
     float d;
@@ -142,7 +137,6 @@ int run_auto(oi_t *data, cyBOT_Scan_t *scan_data)
     char temp;
 
     // Wait for GUI to set robot's initial position
-    // receives encoded position and angle data via UART
     while (uart_data != 0b11000010)
     {
         if (uart_flag && uart_data != 0b11000010)
@@ -201,23 +195,22 @@ int run_auto(oi_t *data, cyBOT_Scan_t *scan_data)
         }
     }
 
-    // Main auto loop - runs until balloon is detected
+    // While the balloon has a connection
     while (!balloon_flag)
     {
-        // 180 scan in front of robot
+        // 1. Full scan 180 in front
         scan_full_arc(scan_data, 0, 180);
         lcd_clear();
 
-        // find objs
+        // 2. Detect objects
         Object_t objects[15];
         obj_count = find_objects(scan_sensor_data_array, 0, 180, objects);
         if (balloon_flag)
             break;
 
-        // Calculate gaps between objects to find possible paths
+        // 3. Use math to find gaps
         gap_center_angle = 0;
         found_gap = 0;
-        // If multiple objects detected, look for gaps between them
         if (obj_count > 3)
         {
             for (i = 0; i < obj_count - 1; i++)
@@ -227,20 +220,18 @@ int run_auto(oi_t *data, cyBOT_Scan_t *scan_data)
                 gap_degrees = left_end - right_start;
                 if (gap_degrees > 0)
                 {
-                    // Convert angle to radians
                     theta_rad = gap_degrees * (M_PI / 180.0);
 
-                    // Get distances at both edges of the gap
+                    // Distances at the edges, instead of center
                     d_left_edge = objects[i + 1].distance;
                     d_right_edge = objects[i].distance;
 
-                    // Use the farther edge for safer navigation
+                    // Use the farther edge instead of previous closer one
                     d = fmax(d_left_edge, d_right_edge);
 
-                    // Calculate actual gap width using trigonometry
+                    // Better width calc hopefully
                     gap_width = 2.0 * d * sin(theta_rad / 2.0);
 
-                    // Check if gap is wide enough for robot to fit
                     if (gap_width >= ROBOT_WIDTH)
                     {
                         found_gap = 1;
@@ -250,10 +241,11 @@ int run_auto(oi_t *data, cyBOT_Scan_t *scan_data)
                 }
             }
         }
+
         if (balloon_flag)
             break;
 
-        // drive toward the found gap
+        // 4. Enter the first valid gap
         if (found_gap)
         {
             if (gap_center_angle < 90)
@@ -266,11 +258,10 @@ int run_auto(oi_t *data, cyBOT_Scan_t *scan_data)
                 turn_counterclockwise(data, gap_center_angle - 90, 50);
             }
             progress(data);
-
-            // If only one object detected, go around it on the larger side
         }
-        else if (obj_count == 3)
-        { // 3 because of fake boundary objects at 0 and 180
+        // 5. Enter larger side (left or right) if only one object
+        else if (obj_count == 3) // 3 because of fake boundary objects at 0 and 180
+        { 
             center = 0;
             left = objects[1].start;
             right = 180 - objects[1].end;
@@ -295,21 +286,19 @@ int run_auto(oi_t *data, cyBOT_Scan_t *scan_data)
             }
             progress(data);
         }
-        else if (obj_count == 2)
+        else if (obj_count == 2) // 5. No gap, turn 90 degrees and try again
         {
-            // No objects detected; go forward
             progress(data);
             lcd_puts("No object");
         }
         else
         {
-            // No navigable gap found; turn 90 degrees and scan again
+            // No room, turn 90 degrees
             lcd_puts("No gap");
             turn_counterclockwise(data, 90, 50);
         }
     }
 
-    // Balloon detected because exited loop
     putty_printf("BALLOON\n");
 
     // Hedwig's Theme

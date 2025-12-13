@@ -1,6 +1,3 @@
-// Sensor scanning and object detection functions
-// Handles IR and ultrasonic sensor data collection and processing
-
 #include <math.h>
 #include <stdlib.h>
 
@@ -15,14 +12,15 @@
 #include "ping.h"
 
 #define PI 3.14159
-#define SCAN_ALPHA_SOUND 0.1   // Smoothing factor for ultrasonic readings
-#define SCAN_ALPHA_IR 0.25     // Smoothing factor for IR readings
+// Smoothing factor for ping sensor
+#define SCAN_ALPHA_SOUND 0.1
+// Smoothing factor for IR sensor
+#define SCAN_ALPHA_IR 0.25
 
 int scan_index = 0;
 float center_distance; // CM
 
-// Performs a servo scan across specified angle range
-// Collects multiple samples at each angle and calls callback function
+// Performs a servo scan across specified angle range, calls callback on each angle scanned
 void scan_range(int lower_angle, int upper_angle, int step, cyBOT_Scan_t *scan_data, void (*callback_ptr)(int angle, cyBOT_Scan_t *scan_data), int num_scans) {
     scan_index = 0;
     int i, j;
@@ -50,13 +48,12 @@ void scan_range(int lower_angle, int upper_angle, int step, cyBOT_Scan_t *scan_d
     free(avg_scan);
 }
 
-// Processes sensor data with noise filtering and smoothing
-// Uses exponential moving average to reduce sensor noise
+// Process noisy data using exponential smoothing
 void process_noisy_data(int angle, cyBOT_Scan_t *scan_data) {
-    // Convert IR voltage reading to distance in cm
+    // Voltage to cm
     double vToCm = VTOCM_COEFF * pow(scan_data->IR_raw_val, VTOCM_EXP);
 
-    // First reading - no previous data to compare against
+    // First scan value
     if (scan_index == 0) {
         scan_sensor_data_array[scan_index].sound_dist = scan_data->sound_dist;
         scan_sensor_data_array[scan_index].IR_raw_val = vToCm < 100 ? vToCm : 100;
@@ -65,7 +62,7 @@ void process_noisy_data(int angle, cyBOT_Scan_t *scan_data) {
 
     cyBOT_Scan_t obj;
 
-    // Smooth ultrasonic data if reading is within 15% of previous value
+    // Smooth ping
     if (scan_data->sound_dist > 0.85 * scan_sensor_data_array[scan_index - 1].sound_dist &&
             scan_data->sound_dist < 1.15 * scan_sensor_data_array[scan_index - 1].sound_dist) {
         obj.sound_dist = SCAN_ALPHA_SOUND * scan_data->sound_dist + (1 - SCAN_ALPHA_SOUND) * scan_sensor_data_array[scan_index - 1].sound_dist;
@@ -73,17 +70,17 @@ void process_noisy_data(int angle, cyBOT_Scan_t *scan_data) {
         obj.sound_dist = scan_data->sound_dist;
     }
 
-    // Smooth IR data if reading is within 30% of previous value
+    // Smooth IR
     if (vToCm > 0.7 * scan_sensor_data_array[scan_index - 1].IR_raw_val &&
             vToCm < 1.30 * scan_sensor_data_array[scan_index - 1].IR_raw_val) {
         obj.IR_raw_val = SCAN_ALPHA_IR * vToCm + (1 - SCAN_ALPHA_IR) * scan_sensor_data_array[scan_index - 1].IR_raw_val;
     } else {
-        // Check if current reading matches value from 2 readings ago (spike detection)
+        // Check for spike
         if (scan_index > 1 && (vToCm > 0.9 * scan_sensor_data_array[scan_index - 2].IR_raw_val &&
                 vToCm < 1.10 * scan_sensor_data_array[scan_index - 2].IR_raw_val)) {
             obj.IR_raw_val = SCAN_ALPHA_IR * vToCm + (1 - SCAN_ALPHA_IR) * scan_sensor_data_array[scan_index - 2].IR_raw_val;
 
-            // Replace old spike with smoothed value
+            // Replace old spike
             scan_sensor_data_array[scan_index - 1].IR_raw_val = obj.IR_raw_val < 100 ? obj.IR_raw_val : 100;
             putty_printf("%3d\t%10f\t%10d\n", angle - 2, scan_sensor_data_array[scan_index - 1].sound_dist, scan_sensor_data_array[scan_index - 1].IR_raw_val);
             timer_waitMillis(100);
@@ -93,61 +90,35 @@ void process_noisy_data(int angle, cyBOT_Scan_t *scan_data) {
         }
     }
 
-    // Cap IR distance at 100 cm
+    // Max distance of 100 cm because smoothing goes off to infinity
     if (obj.IR_raw_val > 100) {
         obj.IR_raw_val = 100;
     }
 
     scan_sensor_data_array[scan_index] = obj;
-    /*double vToCm = VTOCM_COEFF * pow(scan_data->IR_raw_val, VTOCM_EXP);
-
-    if (scan_index == 0) {
-        scan_sensor_data_array[scan_index].sound_dist = scan_data->sound_dist;
-        scan_sensor_data_array[scan_index].IR_raw_val = vToCm;
-        goto process_noisy_data_exit;
-    }
-
-    cyBOT_Scan_t obj;
-
-    if (scan_data->sound_dist > 0.85 * scan_sensor_data_array[scan_index - 1].sound_dist &&
-            scan_data->sound_dist < 1.15 * scan_sensor_data_array[scan_index - 1].sound_dist) {
-        obj.sound_dist = SCAN_ALPHA_SOUND * scan_data->sound_dist + (1 - SCAN_ALPHA_SOUND) * scan_sensor_data_array[scan_index - 1].sound_dist;
-    } else {
-        obj.sound_dist = scan_data->sound_dist;
-    }
-
-    if (vToCm > 0.7 * scan_sensor_data_array[scan_index - 1].IR_raw_val &&
-            vToCm < 1.30 * scan_sensor_data_array[scan_index - 1].IR_raw_val) {
-        obj.IR_raw_val = SCAN_ALPHA_IR * vToCm + (1 - SCAN_ALPHA_IR) * scan_sensor_data_array[scan_index - 1].IR_raw_val;
-    } else {
-        obj.IR_raw_val = vToCm;
-    }
-
-    if (obj.IR_raw_val > 100) {
-        obj.IR_raw_val = 100;
-    }
-
-    scan_sensor_data_array[scan_index] = obj;*/
 
 process_noisy_data_exit:
-    // Send scan data to GUI and display on LCD
+    // Send scan data to GUI
     putty_send_scan_data(angle, &scan_sensor_data_array[scan_index]);
     lcd_clear();
     lcd_printf("%3d %5f %5d\n", angle, scan_sensor_data_array[scan_index].sound_dist, scan_sensor_data_array[scan_index].IR_raw_val);
     scan_index++;
 }
 
-// Callback to store center distance reading
+// Callback to get center distance of object
 void get_center_distance(int angle, cyBOT_Scan_t *scan_data) {
     lcd_printf("%3d %5f %5d\n", angle, scan_data->sound_dist, scan_data->IR_raw_val);
 
     center_distance = scan_data->sound_dist;
 }
 
-// Performs a full 180-degree arc scan with 2-degree increments
+// Performs a scan between two angles with 2-degree increments
 void scan_full_arc(cyBOT_Scan_t *scan_data, int start_angle, int stop_angle) {
+    // Move to start angle
     servo_move(start_angle);
     timer_waitMillis(500);
+
+    // Tell GUI we're doing a scan
     putty_printf("STARTSCAN %d 2\n", ((stop_angle - start_angle) / 2) + 1);
     timer_waitMillis(100);
     scan_range(start_angle, stop_angle, 2, scan_data, process_noisy_data, 3);
@@ -155,7 +126,7 @@ void scan_full_arc(cyBOT_Scan_t *scan_data, int start_angle, int stop_angle) {
     putty_printf("ENDSCAN\n");
 }
 
-// Creates an object structure from scan data
+// Creates an object struct
 Object_t create_object(float dist, int start_angle, int end_angle) {
     struct detect_object object;
 
@@ -166,13 +137,12 @@ Object_t create_object(float dist, int start_angle, int end_angle) {
     return object;
 }
 
-// Updates the linear width of an object based on angle span
+// Updates the linear width of an object
 void object_update_linear_width(Object_t *obj, int start_angle, int end_angle) {
     obj->linear_width = obj->distance * ((end_angle - start_angle) * (PI / 180.0));
 }
 
 // Finds and returns the smallest object detected in scan range
-// Used in manual mode to identify targets
 Object_t find_smallest_objects(cyBOT_Scan_t data_array[], int start_angle, int end_angle, cyBOT_Scan_t *scan_data) {
     float dist = 999.9;
     int start_deg = 0; // current object angle

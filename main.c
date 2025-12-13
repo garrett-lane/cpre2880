@@ -1,6 +1,3 @@
-// CyBot main program - supports both autonomous and manual modes
-// Controls robot navigation, scanning, and balloon detection
-
 #include "adc.h"
 #include "auto.h"
 #include "balloon.h"
@@ -24,25 +21,22 @@
 #include <stdint.h>
 // Dont worry sean, I alphabatized our includes! You're Welcome!
 
-// UART data received from interrupts
 volatile char uart_data; // Your UART interrupt code can place read data here
 
-// Movement types for robot control
 typedef enum movements_e
 {
     FORWARD,
     BACKWARD,
-    CW,  // Clockwise turn
-    CCW, // Counter-clockwise turn
+    CW,
+    CCW,
     NONE
 } Movements;
 
-// Planned movement structure for queuing robot actions
 typedef struct planned_movement_t
 {
-    Movements move; // Type of movement
-    int amount;     // Distance (mm) or angle (degrees)
-    int speed;      // Speed in mm/s
+    Movements move;
+    int amount;
+    int speed;
 } Planned_Movement;
 
 Planned_Movement next_move;
@@ -50,7 +44,7 @@ int prev_full_scan;
 
 void main()
 {
-    // Servo Calibration Mode - used to calibrate sensors before normal operation
+    // Servo Calibration Code
 #if CONFIGURE
     oi_t *cal_data = oi_alloc();
 
@@ -83,8 +77,7 @@ void main()
     servo_move(90);
     timer_waitMillis(300);
     char cal_byte = '\0';
-    // Calibration command loop - waits for commands from PC
-    // 'i' = calibrate IR sensor, 'o' = run average IR scan, '~' = exit
+    // Waits for putty
     while (uart_data != '~')
     {
         if (uart_flag)
@@ -116,7 +109,6 @@ void main()
     return;
 #endif
 
-    // Normal operation mode - initialize all hardware
     oi_t *data = oi_alloc(); // inits serial connect w/ robot; needed before sending commands
     cyBOT_Scan_t scan_data;
 
@@ -135,13 +127,13 @@ void main()
     lcd_clear();
     lcd_puts("v1.3");
 
-    // Run selected mode - MANUAL for remote control, AUTO for autonomous navigation
+    // Runs Auto or Manual based on compiler flag, or exists and clears blue LED
 #if MANUAL
     run_manual(data, &scan_data);
 #elif AUTO
     run_auto(data, &scan_data);
 #endif
 
-    // Clean up and release robot interface
+    //required end statement
     oi_free(data);
 }
