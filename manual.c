@@ -18,6 +18,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+// Manual navigation mode for CyBot
 int run_manual(oi_t *data, cyBOT_Scan_t *scan_data) {
     char temp;
     int left_angle, right_angle;
@@ -57,10 +58,12 @@ int run_manual(oi_t *data, cyBOT_Scan_t *scan_data) {
                     break;
                 case 0b01:
                     // Scan
+                    // Math is on 13 degree intervals so that first 3 bits are 0-90
                     left_angle = 13 * (temp & 0x7);
                     if (left_angle > 90) {
                         left_angle = 90;
                     }
+                    // 90 - 180
                     right_angle = 13 * ((temp >> 3) & 0x7) + 90;
                     if (right_angle > 180) {
                         right_angle = 180;
@@ -117,6 +120,7 @@ int run_manual(oi_t *data, cyBOT_Scan_t *scan_data) {
 
             lcd_printf("Pos x%d y%d d%d", pos_x, pos_y, pos_angle);
 
+            // Always send ACK back to drivers so they can send the next command
             uart_sendStr("ACK\n");
         }
     }
