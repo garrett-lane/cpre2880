@@ -13,19 +13,19 @@
 
 #include "open_interface.h"
 
-#define CALIBRATION_0_DEG -90 // BOT 6
-#define CALIBRATION_180_DEG 217 // BOT 6
-//#define CALIBRATION_0_DEG -73 // BOT 3
-//#define CALIBRATION_180_DEG 256 // BOT 3
+#define CALIBRATION_0_DEG -102 // BOT 1
+#define CALIBRATION_180_DEG 214 // BOT 1
+//#define CALIBRATION_0_DEG -106 // BOT 2
+//#define CALIBRATION_180_DEG 217 // BOT 2
 
 #define STRAIGHT_MULTIPLIER 0.995 // typically overshoots by 0.05% with a multiplier of 1
 #define TURN_MULTIPLIER 1 // don't think should ever need to change
 
 // requires regular calibration per robot
-//#define VTOCM_COEFF 95853.248606 // BOT 3
-//#define VTOCM_EXP -1.140660 // BOT 3
-#define VTOCM_COEFF 111652.420518 // BOT 6
-#define VTOCM_EXP -1.172827 // BOT 6
+#define VTOCM_COEFF 158347.537506 // BOT 1
+#define VTOCM_EXP -1.212053 // BOT 1
+//#define VTOCM_COEFF 58172.587537 // BOT 2
+//#define VTOCM_EXP -1.068098 // BOT 2
 
 void calibrate_ir(oi_t *data);
 void calibrate_servo();
