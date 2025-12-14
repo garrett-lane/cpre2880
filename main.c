@@ -1,3 +1,9 @@
+#include <inc/tm4c123gh6pm.h>
+#include <math.h>
+#include <stdbool.h>
+#include <stdint.h>
+
+#include "Timer.h"
 #include "adc.h"
 #include "auto.h"
 #include "balloon.h"
@@ -13,27 +19,14 @@
 #include "putty.h"
 #include "sensor.h"
 #include "servo.h"
-#include "Timer.h"
 #include "uart.h"
-#include <inc/tm4c123gh6pm.h>
-#include <math.h>
-#include <stdbool.h>
-#include <stdint.h>
 // Dont worry sean, I alphabatized our includes! You're Welcome!
 
-volatile char uart_data; // Your UART interrupt code can place read data here
+volatile char uart_data;  // Your UART interrupt code can place read data here
 
-typedef enum movements_e
-{
-    FORWARD,
-    BACKWARD,
-    CW,
-    CCW,
-    NONE
-} Movements;
+typedef enum movements_e { FORWARD, BACKWARD, CW, CCW, NONE } Movements;
 
-typedef struct planned_movement_t
-{
+typedef struct planned_movement_t {
     Movements move;
     int amount;
     int speed;
@@ -42,13 +35,13 @@ typedef struct planned_movement_t
 Planned_Movement next_move;
 int prev_full_scan;
 
-void main()
-{
+void main() {
     // Servo Calibration Code
 #if CONFIGURE
     oi_t *cal_data = oi_alloc();
 
-    oi_init(cal_data); // should turn the iRobot Create's "Dirt Detect" LED to blue
+    oi_init(
+        cal_data);  // should turn the iRobot Create's "Dirt Detect" LED to blue
     lcd_init();
     timer_init();
     ping_init();
@@ -78,28 +71,24 @@ void main()
     timer_waitMillis(300);
     char cal_byte = '\0';
     // Waits for putty
-    while (uart_data != '~')
-    {
-        if (uart_flag)
-        {
+    while (uart_data != '~') {
+        if (uart_flag) {
             cal_byte = uart_data;
 
-            if (cal_byte == '\n' || cal_byte == '\r')
-            {
+            if (cal_byte == '\n' || cal_byte == '\r') {
                 uart_flag = 0;
                 continue;
             }
 
-            switch (cal_byte)
-            {
-            case 'i':
-                calibrate_ir(cal_data);
-                break;
-            case 'o':
-                avg_ir_scan(cal_data);
-                break;
-            default:
-                break;
+            switch (cal_byte) {
+                case 'i':
+                    calibrate_ir(cal_data);
+                    break;
+                case 'o':
+                    avg_ir_scan(cal_data);
+                    break;
+                default:
+                    break;
             }
 
             uart_flag = 0;
@@ -109,10 +98,11 @@ void main()
     return;
 #endif
 
-    oi_t *data = oi_alloc(); // inits serial connect w/ robot; needed before sending commands
+    oi_t *data = oi_alloc();  // inits serial connect w/ robot; needed before
+                              // sending commands
     cyBOT_Scan_t scan_data;
 
-    oi_init(data); // should turn the iRobot Create's "Dirt Detect" LED to blue
+    oi_init(data);  // should turn the iRobot Create's "Dirt Detect" LED to blue
     lcd_init();
     timer_init();
     servo_init();
@@ -134,6 +124,6 @@ void main()
     run_auto(data, &scan_data);
 #endif
 
-    //required end statement
+    // required end statement
     oi_free(data);
 }

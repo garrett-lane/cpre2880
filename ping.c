@@ -1,15 +1,15 @@
 /*
-*   ping.c
-*   Ping sensor interface
-*
-*
-*   @author Garrett Thompson & Sean Krueger
-*/
-
+ *   ping.c
+ *   Ping sensor interface
+ *
+ *
+ *   @author Garrett Thompson & Sean Krueger
+ */
 
 #include "ping.h"
-#include "lcd.h"
+
 #include "Timer.h"
+#include "lcd.h"
 
 int overflows = 0;
 int pulse;
@@ -17,7 +17,7 @@ int pulse;
 void send_pulse();
 
 void ping_init() {
-    //initialize registers
+    // initialize registers
     SYSCTL_RCGCGPIO_R |= 0x02;
     SYSCTL_RCGCTIMER_R |= 0x08;
 
@@ -41,16 +41,16 @@ void ping_init() {
 
     IntRegister(INT_TIMER3B, TIMER3B_Handler);
     IntMasterEnable();
-
 }
 
 unsigned int ping_read() {
-    //send signal to sensor, wait for isr to collect rising
-    //and falling edges and return the pulse width
+    // send signal to sensor, wait for isr to collect rising
+    // and falling edges and return the pulse width
     state = LOW;
     send_pulse();
 
-    while (state != DONE) { }
+    while (state != DONE) {
+    }
 
     pulse = rising_time - falling_time;
     if (falling_time > rising_time) {
@@ -59,12 +59,12 @@ unsigned int ping_read() {
     }
 
     // ((delta / clock rate) * speed of light) / round trip
-    return (unsigned int) (((pulse / 16000000.0) * 34300) / 2.0);
+    return (unsigned int)(((pulse / 16000000.0) * 34300) / 2.0);
 }
 
 // ISR: Capture rising edge and falling edge time of PING sensor
 void TIMER3B_Handler() {
-    //store timer values when interrupts are triggered
+    // store timer values when interrupts are triggered
     if (TIMER3_MIS_R & 0x400) {
         TIMER3_ICR_R |= 0x400;
 
@@ -97,4 +97,3 @@ void send_pulse() {
     TIMER3_CTL_R |= 0x100;
     TIMER3_IMR_R |= 0x400;
 }
-

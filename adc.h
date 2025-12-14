@@ -6,8 +6,8 @@
 #ifndef ADC_H_
 #define ADC_H_
 
-extern volatile  short adc_data;
-extern volatile  char adc_flag;
+extern volatile short adc_data;
+extern volatile char adc_flag;
 
 // Initialize ADC0 SS1 on Port B with 64x hardware scans + interrupt
 void adc_init(void);

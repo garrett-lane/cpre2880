@@ -8,9 +8,10 @@
 #ifndef BALLOON_H_
 #define BALLOON_H_
 
-#include <stdint.h>
-#include <stdbool.h>
 #include <inc/tm4c123gh6pm.h>
+#include <stdbool.h>
+#include <stdint.h>
+
 #include "driverlib/interrupt.h"
 
 volatile int balloon_flag;

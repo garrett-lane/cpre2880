@@ -1,22 +1,23 @@
-/* 
-*   ping.h
-*   Ping sensor interface
-*
-* 
-* 	@author Garrett Thompson & Sean Krueger
-*/
+/*
+ *   ping.h
+ *   Ping sensor interface
+ *
+ *
+ * 	@author Garrett Thompson & Sean Krueger
+ */
 
 #ifndef PING_H_
 #define PING_H_
 
-#include <stdint.h>
-#include <stdbool.h>
 #include <inc/tm4c123gh6pm.h>
+#include <stdbool.h>
+#include <stdint.h>
+
 #include "driverlib/interrupt.h"
 
-volatile enum {LOW, HIGH, DONE} state; // set by ISR
-volatile unsigned int rising_time; //Pulse start time: Set by ISR
-volatile unsigned int falling_time; //Pulse end time: Set by ISR
+volatile enum { LOW, HIGH, DONE } state;  // set by ISR
+volatile unsigned int rising_time;        // Pulse start time: Set by ISR
+volatile unsigned int falling_time;       // Pulse end time: Set by ISR
 
 void ping_init(void);
 

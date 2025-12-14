@@ -8,8 +8,8 @@
 #ifndef AUTO_H_
 #define AUTO_H_
 
-#include "open_interface.h"
 #include "cyBot_Scan.h"
+#include "open_interface.h"
 
 // Autonomous navigation mode for CyBot
 // Scans for objects, finds gaps, and navigates autonomously

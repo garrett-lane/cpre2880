@@ -1,23 +1,27 @@
 /*
-*   uart.h
-*   Used to set up the UART [UART1 at 115200]
-*
-* 
-* 	@author Garrett Thompson & Sean Krueger
-*/
+ *   uart.h
+ *   Used to set up the UART [UART1 at 115200]
+ *
+ *
+ * 	@author Garrett Thompson & Sean Krueger
+ */
 
 #ifndef UART_H_
 #define UART_H_
 
-#include <stdint.h>
-#include <stdbool.h>
 #include <inc/tm4c123gh6pm.h>
+#include <stdbool.h>
+#include <stdint.h>
+
 #include "driverlib/interrupt.h"
 
 // These two varbles have been declared
 // in the file containing main
-extern volatile  char uart_data;  // Your UART interupt code can place read data here
-extern volatile  char uart_flag;  // Your UART interupt can update this flag to indicate that it has placed new data in uart_data
+extern volatile char
+    uart_data;  // Your UART interupt code can place read data here
+extern volatile char
+    uart_flag;  // Your UART interupt can update this flag to indicate that it
+                // has placed new data in uart_data
 
 void uart_init(int baud);
 

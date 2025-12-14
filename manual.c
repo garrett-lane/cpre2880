@@ -1,22 +1,24 @@
+#include "manual.h"
+
+#include <inc/tm4c123gh6pm.h>
+#include <math.h>
+#include <stdbool.h>
+#include <stdint.h>
+
+#include "Timer.h"
 #include "adc.h"
 #include "button.h"
 #include "calibration.h"
 #include "cyBot_Scan.h"
 #include "driverlib/interrupt.h"
 #include "lcd.h"
-#include "manual.h"
 #include "movement.h"
 #include "open_interface.h"
 #include "ping.h"
 #include "putty.h"
 #include "sensor.h"
 #include "servo.h"
-#include "Timer.h"
 #include "uart.h"
-#include <inc/tm4c123gh6pm.h>
-#include <math.h>
-#include <stdbool.h>
-#include <stdint.h>
 
 // Manual navigation mode for CyBot
 int run_manual(oi_t *data, cyBOT_Scan_t *scan_data) {
@@ -58,7 +60,8 @@ int run_manual(oi_t *data, cyBOT_Scan_t *scan_data) {
                     break;
                 case 0b01:
                     // Scan
-                    // Math is on 13 degree intervals so that first 3 bits are 0-90
+                    // Math is on 13 degree intervals so that first 3 bits are
+                    // 0-90
                     left_angle = 13 * (temp & 0x7);
                     if (left_angle > 90) {
                         left_angle = 90;
@@ -70,7 +73,8 @@ int run_manual(oi_t *data, cyBOT_Scan_t *scan_data) {
                     }
 
                     scan_full_arc(scan_data, left_angle, right_angle);
-                    find_smallest_objects(scan_sensor_data_array, left_angle, right_angle, scan_data);
+                    find_smallest_objects(scan_sensor_data_array, left_angle,
+                                          right_angle, scan_data);
                     break;
                 case 0b10:
                     // Position
@@ -112,10 +116,12 @@ int run_manual(oi_t *data, cyBOT_Scan_t *scan_data) {
                         case 0x01:
                             uart_sendStr("CLEAR\n");
                             break;
-                        default: break;
+                        default:
+                            break;
                     }
                     break;
-                default: break;
+                default:
+                    break;
             }
 
             lcd_printf("Pos x%d y%d d%d", pos_x, pos_y, pos_angle);

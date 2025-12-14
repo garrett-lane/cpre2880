@@ -11,16 +11,20 @@
 
 int pos_x, pos_y, pos_angle;
 
-// Drive FORWARD in a straight line for distance_mm MILLIMETERS at speed_mm MM/S. All values should always be POSITIVE.
+// Drive FORWARD in a straight line for distance_mm MILLIMETERS at speed_mm
+// MM/S. All values should always be POSITIVE.
 int move_forward(oi_t *sensor, int distance_mm, int speed_mm);
 
-// Drive BACKWARD in a straight line for distance_mm MILLIMETERS at speed_mm MM/S. All values should always be POSITIVE.
+// Drive BACKWARD in a straight line for distance_mm MILLIMETERS at speed_mm
+// MM/S. All values should always be POSITIVE.
 int move_backward(oi_t *sensor, int distance_mm, int speed_mm);
 
-// Turn CLOCKWISE in for degrees DEGREES at speed_mm MM/S, halves the speed_MM for the last 30% of the turn. All values should always be POSITIVE.
+// Turn CLOCKWISE in for degrees DEGREES at speed_mm MM/S, halves the speed_MM
+// for the last 30% of the turn. All values should always be POSITIVE.
 int turn_clockwise(oi_t *sensor, int degrees, int speed_mm);
 
-// Turn COUNTERCLOCKWISE in for degrees DEGREES at speed_mm MM/S, halves the speed_MM for the last 30% of the turn. All values should always be POSITIVE.
+// Turn COUNTERCLOCKWISE in for degrees DEGREES at speed_mm MM/S, halves the
+// speed_MM for the last 30% of the turn. All values should always be POSITIVE.
 int turn_counterclockwise(oi_t *sensor, int degrees, int speed_mm);
 
 #endif /* MOVEMENT_H_ */

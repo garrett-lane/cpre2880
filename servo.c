@@ -5,16 +5,15 @@
  *      Author: gthomp
  */
 
-#include <inc/tm4c123gh6pm.h>
-#include <stdint.h>
-#include <servo.h>
 #include <Timer.h>
+#include <inc/tm4c123gh6pm.h>
+#include <servo.h>
+#include <stdint.h>
 
 float m = 1;
 float b = 0;
 
 void servo_init(void) {
-
     SYSCTL_RCGCGPIO_R |= 0x2;
     SYSCTL_RCGCTIMER_R |= 0x2;
 
@@ -26,7 +25,7 @@ void servo_init(void) {
 
     TIMER1_CTL_R &= ~0x100;
     TIMER1_CFG_R = 0x4;
-    TIMER1_TBMR_R |= 0xA; // periodic, pwm en, edge count
+    TIMER1_TBMR_R |= 0xA;  // periodic, pwm en, edge count
     TIMER1_TBPR_R = 0x4;
     TIMER1_TBILR_R = 0xE200;
     TIMER1_TBMATCHR_R &= 0x0;
@@ -37,8 +36,8 @@ void servo_init(void) {
 }
 
 void servo_move(float degrees) {
-
-    float pulse = m * (degrees / 180) + (b / 180.0) + 1; // linear relationship is y = x+1
+    float pulse = m * (degrees / 180) + (b / 180.0) +
+                  1;  // linear relationship is y = x+1
     int cycles = (320000 - ((pulse / 20) * 320000));
 
     TIMER1_TBMATCHR_R = cycles & 0xFFFF;
@@ -46,7 +45,6 @@ void servo_move(float degrees) {
 
     current_degrees = degrees;
     timer_waitMillis(21);
-
 }
 
 void set_servo_calibation(float value_z, float value_one_eighty) {

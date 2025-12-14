@@ -8,9 +8,10 @@
 #ifndef SERVO_H_
 #define SERVO_H_
 
-#include <stdint.h>
 #include <inc/tm4c123gh6pm.h>
 #include <stdbool.h>
+#include <stdint.h>
+
 #include "driverlib/interrupt.h"
 
 int current_degrees;
