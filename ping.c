@@ -16,6 +16,7 @@ int pulse;
 
 void send_pulse();
 
+// Initialize the Ping))) Sensor
 void ping_init() {
     // initialize registers
     SYSCTL_RCGCGPIO_R |= 0x02;
@@ -43,6 +44,7 @@ void ping_init() {
     IntMasterEnable();
 }
 
+// Handler to calculate distance
 unsigned int ping_read() {
     // send signal to sensor, wait for isr to collect rising
     // and falling edges and return the pulse width
@@ -52,6 +54,7 @@ unsigned int ping_read() {
     while (state != DONE) {
     }
 
+    // Overflow
     pulse = rising_time - falling_time;
     if (falling_time > rising_time) {
         pulse = (rising_time - falling_time) & 0xFFFFFFFF;
@@ -78,6 +81,7 @@ void TIMER3B_Handler() {
     }
 }
 
+// Start a Ping))) read
 void send_pulse() {
     TIMER3_CTL_R &= ~0x100;
     TIMER3_IMR_R &= ~0x400;

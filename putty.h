@@ -11,10 +11,16 @@
 #include "cyBot_Scan.h"
 #include "sensor.h"
 
+// Send a Object_t over UART
 void putty_send_object(Object_t *object);
+
+// Send a scan interval over UART
 void putty_send_scan_data(int angle, cyBOT_Scan_t *scan_data);
+
+// Send the bot's current position over UART
 void putty_send_pos();
 
+// Send the string over UART
 void putty_puts(char string[], int length);
 
 // String MUST be null terminated and less than 50 characters

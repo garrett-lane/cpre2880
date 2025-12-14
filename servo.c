@@ -13,6 +13,7 @@
 float m = 1;
 float b = 0;
 
+// Initializes the servo connected to Port B Pin 5
 void servo_init(void) {
     SYSCTL_RCGCGPIO_R |= 0x2;
     SYSCTL_RCGCTIMER_R |= 0x2;
@@ -35,6 +36,7 @@ void servo_init(void) {
     current_degrees = 0;
 }
 
+// Sets the PWM rate to point the servo in a specific direction
 void servo_move(float degrees) {
     float pulse = m * (degrees / 180) + (b / 180.0) +
                   1;  // linear relationship is y = x+1
@@ -47,6 +49,7 @@ void servo_move(float degrees) {
     timer_waitMillis(21);
 }
 
+// Use pre-defined values to calculate proper offsets for the servo
 void set_servo_calibation(float value_z, float value_one_eighty) {
     m = (value_one_eighty - value_z) / 180.0;
     b = value_z;
